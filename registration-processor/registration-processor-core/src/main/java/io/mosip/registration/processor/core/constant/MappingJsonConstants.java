@@ -40,6 +40,26 @@ public class MappingJsonConstants {
 	public static final String IDSCHEMA_VERSION = "IDSchemaVersion";
 	public static final String UIN = "uin";
 	public static final String LOCATION_HIERARCHY_FOR_PROFILING = "locationHierarchyForProfiling";
+	
+	
+	/* Citizenship Verification */
+	public static final String APPLICANT_TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
+	public static final String APPLICANT_CLAN = "applicantPlaceOfOriginClan";
+	public static final String APPLICANT_PLACE_OF_ORIGIN = "applicantPlaceOfOriginDistrict";
+	public static final String FATHER_NIN = "fatherNIN";
+	public static final String FATHER_TRIBE = "fatherIndigenousCommunityTribe";
+	public static final String FATHER_CLAN = "fatherClan";
+	public static final String FATHER_PLACE_OF_ORIGIN = "fatherPlaceOfOriginDistrict";
+	public static final String FATHER_SURNAME = "fatherSurname";
+	public static final String FATHER_GIVENNAME = "fatherGiveName";
+	public static final String FATHER_OTHERNAMES = "fatherOtherNames";
+	public static final String MOTHER_NIN = "motherNIN";
+	public static final String MOTHER_TRIBE = "motherIndigenousCommunityTribe";
+	public static final String MOTHER_CLAN = "motherClan";
+	public static final String MOTHER_PLACE_OF_ORIGIN = "motherNIN";
+	public static final String MOTHER_SURNAME = "motherSurname";
+	public static final String MOTHER_GIVENNAME = "motherGiveName";
+	public static final String MOTHER_OTHERNAMES = "motherOtherNames";
 
 	
 

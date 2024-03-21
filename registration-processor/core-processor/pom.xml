@@ -25,5 +25,8 @@
     	<module>registration-processor-biometric-extraction-stage</module>
     	<module>registration-processor-finalization-stage</module>
         <module>registration-processor-verification-stage</module>
-  </modules>
+        <module>
+        	registration-processor-citizenship-verification-stage
+        </module>
+  	</modules>
 </project>
