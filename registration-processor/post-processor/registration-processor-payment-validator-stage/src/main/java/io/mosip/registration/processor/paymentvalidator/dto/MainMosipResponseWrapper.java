@@ -1,4 +1,4 @@
-package io.mosip.registration.processor.payment.service.dto;
+package io.mosip.registration.processor.paymentvalidator.dto;
 
 /**
  * This is a dto class for the main overall response wrapper that imitates the MOSIP response wrapper object

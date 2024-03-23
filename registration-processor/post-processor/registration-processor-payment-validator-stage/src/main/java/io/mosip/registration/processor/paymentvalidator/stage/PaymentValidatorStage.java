@@ -32,6 +32,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 
+import io.mosip.kernel.core.exception.ExceptionUtils;
 import io.mosip.kernel.core.http.RequestWrapper;
 import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.kernel.core.util.DateUtils;
@@ -48,6 +49,9 @@ import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.paymentvalidator.constants.PrnStatusCode;
 import io.mosip.registration.processor.paymentvalidator.constants.TaxHeadCode;
 import io.mosip.registration.processor.paymentvalidator.dto.ConsumePrnRequestDTO;
+import io.mosip.registration.processor.paymentvalidator.dto.MainMosipResponseDTO;
+import io.mosip.registration.processor.paymentvalidator.dto.PrnConsumedBooleanDTO;
+import io.mosip.registration.processor.paymentvalidator.service.PrnConsumedService;
 import io.mosip.registration.processor.paymentvalidator.util.CustomizedRestApiClient;
 
 @ComponentScan(basePackages = { "${mosip.auth.adapter.impl.basepackage}",
@@ -58,12 +62,15 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 	private static final String STAGE_PROPERTY_PREFIX = "mosip.regproc.paymentvalidator.";
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(PaymentValidatorStage.class);
-
-	@Value("${gateway.payment.service.hostname}")
-	private String paymentServiceUrl;
-
-	@Value("${gateway.payment.service.api}")
-	private String paymentApiUrl;
+	
+	@Value("${gateway.payment.service.api.get-prn-status}")
+	private String getPrnStatusApiUrl;
+	
+	@Value("${gateway.payment.service.api.check-if-prn-consumed}")
+	private String getCheckPrnConsumptionApiUrl;
+	
+	@Value("${gateway.payment.service.api.consume-prn}")
+	private String consumePrnApiUrl;
 
 	/** The mosip event bus. */
 	private MosipEventBus mosipEventBus;
@@ -88,6 +95,9 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 	/** Mosip router for APIs */
 	@Autowired
 	MosipRouter router;
+	
+	@Autowired
+	PrnConsumedService prnConsumedService;
 
 	@Autowired
 	CustomizedRestApiClient restApiClient;
@@ -99,9 +109,6 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 	
 	@Autowired
 	private Environment env;
-	
-	@Autowired
-	private RegistrationProcessorRestClientService<Object> restClientService;
 
 	@Override
 	public MessageDTO process(MessageDTO object) {
@@ -117,26 +124,23 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 		try {
 			
 			String prnNum = utilities.getPacketManagerService().getField(regId,"PRN",object.getReg_type(), ProviderStageName.PAYMENT_VALIDATOR);
+			regProcLogger.info("Extracting PRN from packet");
 			
-			regProcLogger.info("Trying to test for PRN: "+ prnNum);
+			String uinString = utilities.getPacketManagerService().getField(regId, "NIN", object.getReg_type(), ProviderStageName.PAYMENT_VALIDATOR);
+			regProcLogger.info("Extracting NIN from packet");
 			
-			String uinString = utilities.getPacketManagerService().getField(regId, "UIN", object.getReg_type(), ProviderStageName.PAYMENT_VALIDATOR);
-			//String uinString = "8937420915";
-			regProcLogger.info("Trying to test for UIN: "+ uinString);
-
-			String url = paymentServiceUrl + paymentApiUrl + "getPrnStatus/{prn}";
+			String url = getPrnStatusApiUrl + "/{prn}";
 
 			Map<String, String> params = new HashMap<String, String>();
 			params.put("prn", prnNum);
 
 			URI uri = UriComponentsBuilder.fromUriString(url).buildAndExpand(params).toUri();
 			regProcLogger.info("reponse body: "+ uri);
-			//log.info("template: "+ template.toString());
 			
 			ResponseWrapper<Object> response = restApiClient.getApi(uri, ResponseWrapper.class);
 			
 			@SuppressWarnings("unchecked")
-			LinkedHashMap<String, String> jsonStatusResponsemap = (LinkedHashMap<String, String>) response.getResponse();
+			HashMap<String, String> jsonStatusResponsemap = (HashMap<String, String>) response.getResponse();
 			
 			regProcLogger.info("reponse body: "+ jsonStatusResponsemap);
 			try {
@@ -147,7 +151,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 				String objectApplicantIdDataString = utilities.retrieveIdrepoJson(uinString).toString();
 				
 				if(Objects.isNull(objectApplicantIdDataString)) {
-					regProcLogger.info("In Registration Processor", "Payment Validator", "UIN: " + uinString
+					regProcLogger.error("In Registration Processor", "Payment Validator", "UIN: " + uinString
 							+ " doesn't exist.");
 					object.setIsValid(Boolean.FALSE);
 				}
@@ -160,8 +164,6 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 					ArrayNode nodeSurnameArrayNode = (ArrayNode) nodeApplicantIdData.path("surname");
 					ArrayNode nodeGivenNamesArrayNode = (ArrayNode) nodeApplicantIdData.path("givenName");
 					
-					regProcLogger.info("surname node" + nodeSurnameArrayNode.toString());
-					regProcLogger.info("given name node" + nodeGivenNamesArrayNode.toString());
 					
 					// can concat names after extraction from identity data json
 					String fullNameString = nodeSurnameArrayNode.path(0).path("value").asText()+ " " + 
@@ -183,22 +185,20 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 							} else {
 								if (checkIfPrnWasUsedBefore(prnNum)) {
 									regProcLogger.info("In Registration Processor", "Payment Validator",
-											"PRN: " + prnNum + " was paid/used before. Reject application.");
+											"PRNs paid/used before. Reject a: " + prnNum + " wpplication.");
 									object.setIsValid(Boolean.FALSE);
 								} else {
 									
-									regProcLogger.info("PRN hasnt been used before so continue to saving" );
+									regProcLogger.info("PRN hasn't been used before so continue to saving" );
 									// Confirm payment and add prn to consumption
 									if (consumePrn(prnNum, regId)) {
 										object.setIsValid(Boolean.TRUE);
-										object.setInternalError(Boolean.FALSE);
 										regProcLogger.info("In Registration Processor", "Payment Validator",
 												"PRN: " + prnNum + " consumption success. Send to next stage.");
 									} else {
-										regProcLogger.info("In Registration Processor", "Payment Validator",
+										regProcLogger.error("In Registration Processor", "Payment Validator",
 												"PRN: " + prnNum + " consumption failed. Send to reprocessing.");
-										object.setIsValid(Boolean.TRUE);
-										object.setInternalError(Boolean.TRUE);
+										object.setIsValid(Boolean.FALSE);
 									}
 								}
 							}
@@ -207,7 +207,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 					} else {
 						regProcLogger.info("In Registration Processor", "Payment Validator", "PRN: " + prnNum
-								+ ". Tax payer name is different from names on UIN. Sending to awaiting payment stage.");
+								+ ". Tax payer name is different from names on UIN. Sending to manual verification stage.");
 						object.setIsValid(Boolean.FALSE);
 					}
 				}
@@ -216,19 +216,17 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 
 			} catch (Exception e) {
-				e.printStackTrace();
 				object.setIsValid(Boolean.FALSE);
 				object.setInternalError(Boolean.TRUE);
 				regProcLogger.error("In Registration Processor", "Payment Validator",
-						"Failed to convert extract response from api: " + e.getMessage());
+						"Failed to convert extract response from api: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
 			object.setIsValid(Boolean.FALSE);
 			object.setInternalError(Boolean.TRUE);
 			regProcLogger.error("In Registration Processor", "Payment Validator",
-					"Failed to access Payment service api: " + e.getMessage());
+					"Failed to access Payment service api: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
 		}
 
 		return object;
@@ -253,60 +251,17 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 		this.createServer(router.getRouter(), getPort());
 	}
 
-	private Boolean checkIfPrnWasUsedBefore(String prn) throws Exception {
-
-		Boolean prnUsedBefore = false;
-
-		String url = paymentServiceUrl + paymentApiUrl + "checkIfPrnConsumed/{prn}";
-
-		Map<String, String> params = new HashMap<String, String>();
-		params.put("prn", prn);
-
-		URI uri = UriComponentsBuilder.fromUriString(url).buildAndExpand(params).toUri();
-
-		ResponseWrapper<Object> response = restApiClient.getApi(uri, ResponseWrapper.class);
-
-		@SuppressWarnings("unchecked")
-		LinkedHashMap<String, Boolean> jsonStatusResponsemap = (LinkedHashMap<String, Boolean>) response.getResponse();
-		
-		prnUsedBefore = jsonStatusResponsemap.get("prnAlreadyUsed");
-		
-		regProcLogger.info("prn consumed status? " + prnUsedBefore);
-
-		return prnUsedBefore;
+	private boolean checkIfPrnWasUsedBefore(String prn) throws Exception {
+		return prnConsumedService.checkIfPrnConsumed(prn);
 	}
 
-	private Boolean consumePrn(String prn, String regId) throws Exception {
-		Boolean consumedPrnBoolean = false;
-		
+	private boolean consumePrn(String prn, String regId) throws Exception {
+
 		ConsumePrnRequestDTO consumePrnRequestDTO = new ConsumePrnRequestDTO();
 		consumePrnRequestDTO.setPrnNum(prn);
 		consumePrnRequestDTO.setRegId(regId);
 
-		String url = paymentServiceUrl + paymentApiUrl + "consumePrn";
-
-		RequestWrapper<ConsumePrnRequestDTO> request = new RequestWrapper<>();
-
-		request.setRequest(consumePrnRequestDTO);
-		request.setVersion("1.0");
-		DateTimeFormatter format = DateTimeFormatter.ofPattern(env.getProperty(DATETIME_PATTERN));
-		LocalDateTime localdatetime = LocalDateTime
-				.parse(DateUtils.getUTCCurrentDateTimeString(env.getProperty(DATETIME_PATTERN)), format);
-		request.setRequesttime(localdatetime);
-	
-		regProcLogger.info("Request ->" + request);
-
-		ResponseWrapper<?> response = restApiClient.postApi( url, MediaType.APPLICATION_JSON ,request, ResponseWrapper.class );
-
-		regProcLogger.info("In Registration Processor", "Payment Validator",
-				"response for consumeprn: " + response.toString());
-		
-		@SuppressWarnings("unchecked")
-		LinkedHashMap<String, Boolean> jsonStatusResponsemap = (LinkedHashMap<String, Boolean>) response.getResponse();
-		
-		consumedPrnBoolean = jsonStatusResponsemap.get("consumedStatus");
-
-		return consumedPrnBoolean;
+		return prnConsumedService.consumePrnAsUsed(consumePrnRequestDTO);
 				
 	}
 

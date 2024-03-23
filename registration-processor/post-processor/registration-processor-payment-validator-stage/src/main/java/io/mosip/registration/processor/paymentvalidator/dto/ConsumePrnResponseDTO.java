@@ -1,6 +1,7 @@
-package io.mosip.registration.processor.payment.service.dto;
+package io.mosip.registration.processor.paymentvalidator.dto;
+
 import java.io.Serializable;
-import lombok.AllArgsConstructor;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -10,14 +11,16 @@ import lombok.ToString;
 @Setter
 @NoArgsConstructor
 @ToString
-@AllArgsConstructor
-public class ExceptionJSONInfoDTO implements Serializable{
+public class ConsumePrnResponseDTO implements Serializable{
 
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
 	
-	private String errorCode;
-	private String message;
+	private String prnNum;
+	private String regId;
+	private Boolean consumedStatus;
+
 }
+

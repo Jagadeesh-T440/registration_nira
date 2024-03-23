@@ -1,4 +1,4 @@
-package io.mosip.registration.processor.payment.service.entity;
+package io.mosip.registration.processor.paymentvalidator.entity;
 
 import java.io.Serializable;
 

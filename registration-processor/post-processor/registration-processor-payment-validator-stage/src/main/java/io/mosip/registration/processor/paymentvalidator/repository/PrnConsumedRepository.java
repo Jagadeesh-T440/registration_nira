@@ -1,11 +1,11 @@
-package io.mosip.registration.processor.payment.service.repository;
+package io.mosip.registration.processor.paymentvalidator.repository;
 
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-import io.mosip.registration.processor.payment.service.entity.PrnConsumedEntity;
+import io.mosip.registration.processor.paymentvalidator.entity.PrnConsumedEntity;
 
 
 public interface PrnConsumedRepository extends JpaRepository<PrnConsumedEntity, Long>{

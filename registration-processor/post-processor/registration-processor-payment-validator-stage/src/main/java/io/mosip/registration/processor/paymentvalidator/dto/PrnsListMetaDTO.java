@@ -1,4 +1,4 @@
-package io.mosip.registration.processor.payment.service.dto;
+package io.mosip.registration.processor.paymentvalidator.dto;
 
 import java.io.Serializable;
 import java.util.List;
@@ -8,14 +8,14 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class PrnsConsumedListMetaDTO implements Serializable {
+public class PrnsListMetaDTO implements Serializable{
 
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
 	
-	private List<PrnsConsumedListViewDTO> prns;
+	private List<PrnsListViewDTO> prns;
 	private String totalRecords;
 
 }

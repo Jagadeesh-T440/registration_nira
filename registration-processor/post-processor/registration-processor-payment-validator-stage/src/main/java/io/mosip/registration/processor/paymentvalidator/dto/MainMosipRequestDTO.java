@@ -1,4 +1,4 @@
-package io.mosip.registration.processor.payment.service.dto;
+package io.mosip.registration.processor.paymentvalidator.dto;
 
 import java.io.Serializable;
 import java.util.Date;
