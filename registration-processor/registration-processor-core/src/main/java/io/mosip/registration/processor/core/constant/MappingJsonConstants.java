@@ -42,24 +42,46 @@ public class MappingJsonConstants {
 	public static final String LOCATION_HIERARCHY_FOR_PROFILING = "locationHierarchyForProfiling";
 	
 	
-	/* Citizenship Verification */
-	public static final String APPLICANT_TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
-	public static final String APPLICANT_CLAN = "applicantPlaceOfOriginClan";
-	public static final String APPLICANT_PLACE_OF_ORIGIN = "applicantPlaceOfOriginDistrict";
-	public static final String FATHER_NIN = "fatherNIN";
-	public static final String FATHER_TRIBE = "fatherIndigenousCommunityTribe";
-	public static final String FATHER_CLAN = "fatherClan";
-	public static final String FATHER_PLACE_OF_ORIGIN = "fatherPlaceOfOriginDistrict";
-	public static final String FATHER_SURNAME = "fatherSurname";
-	public static final String FATHER_GIVENNAME = "fatherGiveName";
-	public static final String FATHER_OTHERNAMES = "fatherOtherNames";
-	public static final String MOTHER_NIN = "motherNIN";
-	public static final String MOTHER_TRIBE = "motherIndigenousCommunityTribe";
-	public static final String MOTHER_CLAN = "motherClan";
-	public static final String MOTHER_PLACE_OF_ORIGIN = "motherNIN";
-	public static final String MOTHER_SURNAME = "motherSurname";
-	public static final String MOTHER_GIVENNAME = "motherGiveName";
-	public static final String MOTHER_OTHERNAMES = "motherOtherNames";
+/* Citizenship Verification */
+public static final String APPLICANT_TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
+public static final String APPLICANT_CLAN = "applicantPlaceOfOriginClan";
+public static final String APPLICANT_PLACE_OF_ORIGIN = "applicantPlaceOfOriginDistrict";
+public static final String FATHER_NIN = "fatherNIN";
+public static final String FATHER_TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
+public static final String PARENT_TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
+public static final String PARENT_CLAN = "applicanClantPlaceOfOrigin";
+public static final String PARENT_PLACE_OF_ORIGIN = "applicanClantPlaceOfOrigin";
+public static final String FATHER_CLAN = "fatherIndigenousCommunityClan";
+public static final String FATHER_PLACE_OF_ORIGIN = "fatherPlaceOfOriginDistrict";
+public static final String FATHER_SURNAME = "fatherSurname";
+public static final String FATHER_GIVENNAME = "fatherGiveName";
+public static final String FATHER_OTHERNAMES = "fatherOtherNames";
+public static final String MOTHER_NIN = "motherNIN";
+public static final String MOTHER_TRIBE = "motherIndigenousCommunityTribe";
+public static final String MOTHER_CLAN = "motherClan";
+public static final String MOTHER_PLACE_OF_ORIGIN = "motherPlaceOfResidenceDistrict";
+public static final String MOTHER_SURNAME = "motherSurname";
+public static final String MOTHER_GIVENNAME = "motherGiveName";
+public static final String MOTHER_OTHERNAMES = "motherOtherNames";
+public static final String GUARDIAN_NIN = "gurdianNin";
+public static final String GUARDIAN_RELATION_TO_APPLICANT = "guardianRelationToApplicant";
+public static final String GUARDIAN_CLAN = "applicantclan";
+public static final String GUARDIAN_TRIBE = "applicanttribe";
+public static final String GUARDIAN_PLACE_OF_ORIGIN = "applicantplaceoforigin";
+public static final String APPLICANT_DATEOFBIRTH = "dateOfBirth";
+public static final String APPLICANT_CITIZENSHIPTYPE = "applicantCitizenshipType";
+public static final String FATHER_LIVINGSTATUS = "fatherlivingStatus";
+public static final String MOTHER_LIVINGSTATUS = "motherlivingstatus";
+public static final String CLAN = "applicantPlaceOfOriginClan";
+public static final String TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
+public static final String PERSON = "person";
+public static final String PLACE_OF_ORIGIN = "applicantPlaceOfOriginDistrict";
+public static final String GUARDIAN_TRIBE_FORM = "guardianTribe";
+public static final String GUARDIAN_CLAN_FORM = "guardianClan";
+public static final String GUARDIAN_LIVING_STATUS = "guardianlivingstatus";
+public static final String DATE_FORMAT = "yyyy/MM/dd";
+public static final String NIN_STATUS = "status";
+
 
 	
 

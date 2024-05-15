@@ -17,10 +17,11 @@ import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 import io.mosip.registration.processor.core.spi.restclient.RegistrationProcessorRestClientService;
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 
-@ComponentScan(basePackages = { "${mosip.auth.adapter.impl.basepackage}",
-		"io.mosip.registration.processor.rest.client.config", "io.mosip.registration.processor.core.kernel.beans",
-		"io.mosip.registration.processor.core.config", "io.mosip.registration.processor.packet.storage.config",
-		"io.mosip.registration.processor.citizenship.verification.config"})
+@ComponentScan(basePackages = { "${mosip.auth.adapter.impl.basepackage}","io.mosip.registration.processor.stages.config",
+		"io.mosip.registration.processor.rest.client.config", "io.mosip.registration.processor.status.config", "io.mosip.registration.processor.core.kernel.beans",
+		"io.mosip.registration.processor.core.config", "io.mosip.registration.processor.packet.storage.config","io.mosip.registration.processor.packet.manager.config",
+		"io.mosip.registration.processor.citizenship.verification.stage", "io.mosip.registration.processor.citizenship.verification.service","io.mosip.registration.processor.stages.config",
+		"io.mosip.registration.processor.citizenship.verification.util", "io.mosip.registration.processor.message.sender.template", "io.mosip.registration.processor.core.util" })
 public class CitizenshipVerificationStage extends MosipVerticleAPIManager{
 
 	private static final String STAGE_PROPERTY_PREFIX = "mosip.regproc.citizenshipverification.";
@@ -65,15 +66,17 @@ public class CitizenshipVerificationStage extends MosipVerticleAPIManager{
 				MessageBusAddress.CITIZENSHIP_VERIFICATION_BUS_OUT, messageExpiryTimeLimit);
 	}
 
-	@Override
-	protected String getPropertyPrefix() {
-		return STAGE_PROPERTY_PREFIX;
-	}
+
 
 	@Override
 	public void start() {
 		router.setRoute(this.postUrl(getVertx(), MessageBusAddress.CITIZENSHIP_VERIFICATION_BUS_IN,
 				MessageBusAddress.CITIZENSHIP_VERIFICATION_BUS_OUT));
 		this.createServer(router.getRouter(), getPort());
+	}
+	
+	@Override
+	protected String getPropertyPrefix() {
+		return STAGE_PROPERTY_PREFIX;
 	}
 }
