@@ -1,12 +1,15 @@
 package io.mosip.registration.processor.paymentvalidator.dto;
 
+import java.io.Serializable;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Data;
 
 @Data
 public class PrnStatusRequestDTO {
 
-	private String id;
-	private String reponse;
-	private String status;
+	@JsonProperty("PRN")
+	private String PRN;
 	
 }

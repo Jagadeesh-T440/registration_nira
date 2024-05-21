@@ -1,76 +1,73 @@
 package io.mosip.registration.processor.paymentvalidator.stage;
 
-import java.net.URI;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+
 import java.util.Objects;
 
-import org.apache.commons.beanutils.converters.BooleanConverter;
-import org.apache.commons.net.util.Base64;
-import org.hibernate.engine.query.spi.sql.NativeSQLQueryCollectionReturn;
+import org.json.simple.JSONObject;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import io.mosip.kernel.core.exception.ExceptionUtils;
-import io.mosip.kernel.core.http.RequestWrapper;
 import io.mosip.kernel.core.logger.spi.Logger;
-import io.mosip.kernel.core.util.DateUtils;
 import io.mosip.registration.processor.core.abstractverticle.MessageBusAddress;
 import io.mosip.registration.processor.core.abstractverticle.MessageDTO;
 import io.mosip.registration.processor.core.abstractverticle.MosipEventBus;
 import io.mosip.registration.processor.core.abstractverticle.MosipRouter;
 import io.mosip.registration.processor.core.abstractverticle.MosipVerticleAPIManager;
+import io.mosip.registration.processor.core.code.RegistrationTransactionTypeCode;
 import io.mosip.registration.processor.core.constant.ProviderStageName;
 import io.mosip.registration.processor.core.http.ResponseWrapper;
 import io.mosip.registration.processor.core.logger.RegProcessorLogger;
-import io.mosip.registration.processor.core.spi.restclient.RegistrationProcessorRestClientService;
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.paymentvalidator.constants.PrnStatusCode;
+import io.mosip.registration.processor.paymentvalidator.constants.RegType;
 import io.mosip.registration.processor.paymentvalidator.constants.TaxHeadCode;
 import io.mosip.registration.processor.paymentvalidator.dto.ConsumePrnRequestDTO;
-import io.mosip.registration.processor.paymentvalidator.dto.MainMosipResponseDTO;
-import io.mosip.registration.processor.paymentvalidator.dto.PrnConsumedBooleanDTO;
-import io.mosip.registration.processor.paymentvalidator.service.PrnConsumedService;
+import io.mosip.registration.processor.paymentvalidator.dto.IsPrnRegInLogsRequestDTO;
+import io.mosip.registration.processor.paymentvalidator.dto.PrnStatusResponseDTO;
+import io.mosip.registration.processor.paymentvalidator.dto.PrnStatusResponseDataDTO;
+import io.mosip.registration.processor.paymentvalidator.dto.PrnStatusRequestDTO;
 import io.mosip.registration.processor.paymentvalidator.util.CustomizedRestApiClient;
+import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
+import io.mosip.registration.processor.status.dto.RegistrationStatusDto;
+import io.mosip.registration.processor.status.service.RegistrationStatusService;
+
+/**
+ * Payment Validation Stage for verifying payment registration numbers
+ * 
+ * 
+ * @author Ibrahim Nkambo
+ */
 
 @ComponentScan(basePackages = { "${mosip.auth.adapter.impl.basepackage}",
 		"io.mosip.registration.processor.rest.client.config", "io.mosip.registration.processor.core.kernel.beans",
 		"io.mosip.registration.processor.core.config", "io.mosip.registration.processor.packet.storage.config",
-		"io.mosip.registration.processor.paymentvalidator.config"})
+		"io.mosip.registration.processor.paymentvalidator.config",
+		"io.mosip.registration.processor.paymentvalidator.service" })
 public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 	private static final String STAGE_PROPERTY_PREFIX = "mosip.regproc.paymentvalidator.";
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(PaymentValidatorStage.class);
-	
+
 	@Value("${gateway.payment.service.api.get-prn-status}")
 	private String getPrnStatusApiUrl;
-	
+
 	@Value("${gateway.payment.service.api.check-if-prn-consumed}")
-	private String getCheckPrnConsumptionApiUrl;
-	
+	private String checkPrnConsumptionApiUrl;
+
 	@Value("${gateway.payment.service.api.consume-prn}")
 	private String consumePrnApiUrl;
+
+	@Value("${gateway.payment.service.api.check-logs}")
+	private String checkLogsApiUrl;
 
 	/** The mosip event bus. */
 	private MosipEventBus mosipEventBus;
@@ -81,7 +78,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 	 */
 	@Value("${mosip.regproc.paymentvalidator.message.expiry-time-limit}")
 	private Long messageExpiryTimeLimit;
-	
+
 	private static final String DATETIME_PATTERN = "mosip.registration.processor.datetime.pattern";
 
 	/** The cluster manager url. */
@@ -95,9 +92,6 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 	/** Mosip router for APIs */
 	@Autowired
 	MosipRouter router;
-	
-	@Autowired
-	PrnConsumedService prnConsumedService;
 
 	@Autowired
 	CustomizedRestApiClient restApiClient;
@@ -106,127 +100,142 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 	@Autowired
 	private Utilities utilities;
-	
+
 	@Autowired
 	private Environment env;
 
+	/** The registration status service. */
+	@Autowired
+	RegistrationStatusService<String, InternalRegistrationStatusDto, RegistrationStatusDto> registrationStatusService;
+
+	@SuppressWarnings("null")
 	@Override
 	public MessageDTO process(MessageDTO object) {
-		
+
 		object.setIsValid(Boolean.FALSE);
 		object.setInternalError(Boolean.FALSE);
 		object.setMessageBusAddress(MessageBusAddress.PAYMENT_VALIDATOR_BUS_IN);
-		regProcLogger.info("In Registration Processor", "Payment Validator", "Entering payment validator stage");
+		regProcLogger.info("In Registration Processor - Payment Validator - Entering payment validator stage");
+
+		boolean isTransactionSuccessful = false;
 
 		String regId = object.getRid();
-		//String prnNum = "1122334455";
+		String regType = object.getReg_type();
+		InternalRegistrationStatusDto registrationStatusDto = null;
 
 		try {
-			
-			String prnNum = utilities.getPacketManagerService().getField(regId,"PRN",object.getReg_type(), ProviderStageName.PAYMENT_VALIDATOR);
-			regProcLogger.info("Extracting PRN from packet");
-			
-			String uinString = utilities.getPacketManagerService().getField(regId, "NIN", object.getReg_type(), ProviderStageName.PAYMENT_VALIDATOR);
-			regProcLogger.info("Extracting NIN from packet");
-			
-			String url = getPrnStatusApiUrl + "/{prn}";
+			registrationStatusDto = registrationStatusService.getRegistrationStatus(regId, object.getReg_type(),
+					object.getIteration(), object.getWorkflowInstanceId());
+			registrationStatusDto
+					.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.PAYMENT_VALIDATION.toString());
+			registrationStatusDto.setRegistrationStageName(getStageName());
 
-			Map<String, String> params = new HashMap<String, String>();
-			params.put("prn", prnNum);
+			regProcLogger.info("In Registration Processor - Payment Validator - Extracting PRN from packet");
+			String prnNum = utilities.getPacketManagerService().getField(regId, "PRN", object.getReg_type(),
+					ProviderStageName.PAYMENT_VALIDATOR);
 
-			URI uri = UriComponentsBuilder.fromUriString(url).buildAndExpand(params).toUri();
-			regProcLogger.info("reponse body: "+ uri);
-			
-			ResponseWrapper<Object> response = restApiClient.getApi(uri, ResponseWrapper.class);
-			
-			@SuppressWarnings("unchecked")
-			HashMap<String, String> jsonStatusResponsemap = (HashMap<String, String>) response.getResponse();
-			
-			regProcLogger.info("reponse body: "+ jsonStatusResponsemap);
-			try {
-				String prnReturnedStatusCode = jsonStatusResponsemap.get("prnStatusCode");
-				String prnReturnedTaxHeadCode = jsonStatusResponsemap.get("prnTaxHead");
-				String prnTaxPayerName = jsonStatusResponsemap.get("prnTaxPayerName");
+			/* Will change to NIN in new env version */
+			regProcLogger.info("In Registration Processor - Payment Validator - Extracting NIN from packet");
+			String uin = utilities.getPacketManagerService().getField(regId, "UIN", object.getReg_type(),
+					ProviderStageName.PAYMENT_VALIDATOR);
 
-				String objectApplicantIdDataString = utilities.retrieveIdrepoJson(uinString).toString();
-				
-				if(Objects.isNull(objectApplicantIdDataString)) {
-					regProcLogger.error("In Registration Processor", "Payment Validator", "UIN: " + uinString
-							+ " doesn't exist.");
-					object.setIsValid(Boolean.FALSE);
-				}
-				else {
-					JsonNode nodeApplicantIdData = objectMapper.readTree(objectApplicantIdDataString);
+			if (regType.equalsIgnoreCase(RegType.LOST_USECASE) || regType.equalsIgnoreCase(RegType.UPDATE_USECASE)) {
+
+					PrnStatusResponseDTO prnStatusResponseMap = checkPrnStatus(prnNum);
+					PrnStatusResponseDataDTO dataResponse = prnStatusResponseMap.getData();
 					
-					regProcLogger.info("UIN object " + nodeApplicantIdData.toString());
-					
-					// change names array node to cater for surname, given names and other names
-					ArrayNode nodeSurnameArrayNode = (ArrayNode) nodeApplicantIdData.path("surname");
-					ArrayNode nodeGivenNamesArrayNode = (ArrayNode) nodeApplicantIdData.path("givenName");
-					
-					
-					// can concat names after extraction from identity data json
-					String fullNameString = nodeSurnameArrayNode.path(0).path("value").asText()+ " " + 
-							nodeGivenNamesArrayNode.path(0).path("value").asText();
-
-					if (prnTaxPayerName.equalsIgnoreCase(fullNameString)) {
-
-						if (!prnReturnedTaxHeadCode.equals(TaxHeadCode.TAX_HEAD_CASE_LOST.getTaxHeadCode())
-								&& !prnReturnedTaxHeadCode.equals(TaxHeadCode.TAX_HEAD_CASE_UPDATE_NEW_CARD.getTaxHeadCode())) {
-
-							regProcLogger.info("In Registration Processor", "Payment Validator",
-									"PRN: " + prnNum + " not valid for the usecase");
-							object.setIsValid(Boolean.FALSE);
-						} else {
-							if (!prnReturnedStatusCode.equals(PrnStatusCode.PRN_STATUS_RECEIVED_CREDITED.getStatusCode())) {
-								regProcLogger.info("In Registration Processor", "Payment Validator",
-										"PRN: " + prnNum + " not paid. Reject application.");
+					if (dataResponse != null) {
+						try {
+							/* will change to allow handles method using NIN */
+							JSONObject uinJson = utilities.retrieveIdrepoJson(uin);
+						
+							if (Objects.isNull(uinJson)) {
+								regProcLogger.error("In Registration Processor - Payment Validator - UIN/NIN doesn't exist.");
+								/* Send notification to applicant here */
 								object.setIsValid(Boolean.FALSE);
 							} else {
-								if (checkIfPrnWasUsedBefore(prnNum)) {
-									regProcLogger.info("In Registration Processor", "Payment Validator",
-											"PRNs paid/used before. Reject a: " + prnNum + " wpplication.");
+								regProcLogger.info("In Registration Processor - Payment Validator - UIN/NIN check - passed");
+								/* can we wait for payment if the PRN isn't paid yet? */
+								if (!dataResponse.getStatusCode()
+										.equalsIgnoreCase(PrnStatusCode.PRN_STATUS_RECEIVED_CREDITED.getStatusCode())) {
+									regProcLogger.info("In Registration Processor - Payment Validator - PRN not paid.");
+									/* Send notification to applicant here */
 									object.setIsValid(Boolean.FALSE);
+									/* how to route packet to try for more time for update of status from payment gateway service */
 								} else {
-									
-									regProcLogger.info("PRN hasn't been used before so continue to saving" );
-									// Confirm payment and add prn to consumption
-									if (consumePrn(prnNum, regId)) {
-										object.setIsValid(Boolean.TRUE);
-										regProcLogger.info("In Registration Processor", "Payment Validator",
-												"PRN: " + prnNum + " consumption success. Send to next stage.");
-									} else {
-										regProcLogger.error("In Registration Processor", "Payment Validator",
-												"PRN: " + prnNum + " consumption failed. Send to reprocessing.");
+									regProcLogger.info("In Registration Processor - Payment Validator - Payment status check - passed");
+									if (!validateTaxHeadAndRegType(dataResponse, regType)) {
+										regProcLogger.info("In Registration Processor - Payment Validator - PRN not valid for the usecase");
 										object.setIsValid(Boolean.FALSE);
+										/* Send notification to applicant here */
+									} else {
+										regProcLogger.info("In Registration Processor - Payment Validator - PRN valid for the usecase");
+										
+										if(checkTranscLogs(prnNum, regId)) {
+											/* Check for re-processing of packet */
+											if(!registrationStatusDto.getStatusCode().equals("PROCESSED")
+												|| !registrationStatusDto.getStatusCode().equals("PROCESSING")) {
+												
+												object.setIsValid(Boolean.TRUE);
+												regProcLogger.info(
+														"In Registration Processor - Payment Validator - PRN consumption success. Send to next stage.");
+											}
+											else {
+												
+												regProcLogger.info(
+														"In Registration Processor - Payment Validator - PRNs paid/used before. Reject packet.");
+												/* Send notification to applicant here */
+												object.setIsValid(Boolean.FALSE);
+											}
+										}else {
+											
+											regProcLogger.info(
+													"In Registration Processor - Payment Validator - PRN consumption check - false");
+											/* Add regId and PRN to consumption */ 
+											ConsumePrnRequestDTO consumePrnRequestDTO = new ConsumePrnRequestDTO();
+											consumePrnRequestDTO.setPrn(prnNum);
+											consumePrnRequestDTO.setRegId(regId);
+
+											regProcLogger.info(
+													"In Registration Processor - Payment Validator - Proceeding to consume PRN");
+											if (consumePrn(consumePrnRequestDTO)) {
+												object.setIsValid(Boolean.TRUE);
+												regProcLogger.info(
+														"In Registration Processor - Payment Validator - PRN consumption success. Send to next stage.");
+											} else {
+												regProcLogger.error(
+														"In Registration Processor - Payment Validator - PRN consumption failed. Send to reprocessing.");
+												object.setIsValid(Boolean.FALSE);
+											}	
+										}
+										
+										
 									}
+
 								}
+
 							}
 
+						} catch (Exception e) {
+							object.setIsValid(Boolean.FALSE);
+							object.setInternalError(Boolean.TRUE);
+							regProcLogger.error(
+									"In Registration Processor - Payment Validator - Failed to check if NIN exists: "
+											+ e.getMessage());
 						}
-
-					} else {
-						regProcLogger.info("In Registration Processor", "Payment Validator", "PRN: " + prnNum
-								+ ". Tax payer name is different from names on UIN. Sending to manual verification stage.");
-						object.setIsValid(Boolean.FALSE);
 					}
-				}
-				
-				
+					else {
+						object.setIsValid(Boolean.FALSE);
+						regProcLogger.error("In Registration Processor - Payment Validator - Invalid PRN");
+						/* Send notification to applicant here */
+					}
 
-
-			} catch (Exception e) {
-				object.setIsValid(Boolean.FALSE);
-				object.setInternalError(Boolean.TRUE);
-				regProcLogger.error("In Registration Processor", "Payment Validator",
-						"Failed to convert extract response from api: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
 			}
-
 		} catch (Exception e) {
 			object.setIsValid(Boolean.FALSE);
 			object.setInternalError(Boolean.TRUE);
-			regProcLogger.error("In Registration Processor", "Payment Validator",
-					"Failed to access Payment service api: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
+			regProcLogger.error("In Registration Processor - Payment Validator - Failed to access Payment service api: "
+					+ e.getMessage() + ExceptionUtils.getStackTrace(e));
 		}
 
 		return object;
@@ -250,19 +259,150 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 				MessageBusAddress.PAYMENT_VALIDATOR_BUS_OUT));
 		this.createServer(router.getRouter(), getPort());
 	}
+	/**
+	 * This method calls an external API to check the transaction logs if PRN and RegId is present
+	 * 
+	 * 
+	 * @param prn
+	 * @param regId
+	 * @return status
+	 */
+	@SuppressWarnings("unchecked")
+	private boolean checkTranscLogs(String prn, String regId) {
+		regProcLogger.info(
+				"In Registration Processor - Payment Validator - Checking payment gateway service if PRN and Reg Id are present in transaction logs");
 
-	private boolean checkIfPrnWasUsedBefore(String prn) throws Exception {
-		return prnConsumedService.checkIfPrnConsumed(prn);
+		boolean isPresentInLogs = false;
+
+		IsPrnRegInLogsRequestDTO isPrnRegInLogsRequestDTO = new IsPrnRegInLogsRequestDTO();
+		isPrnRegInLogsRequestDTO.setPrn(prn);
+		isPrnRegInLogsRequestDTO.setRegId(regId);
+
+		HashMap<String, Boolean> responseMap = null;
+		ResponseWrapper<?> response = null;
+
+		try {
+			response = restApiClient.postApi(checkLogsApiUrl, MediaType.APPLICATION_JSON, isPrnRegInLogsRequestDTO,
+					ResponseWrapper.class);
+			
+			if(response.getErrors()!=null) {
+				isPresentInLogs = true;
+			}
+			else {
+				responseMap = (HashMap<String, Boolean>) response.getResponse();
+				if (responseMap != null && responseMap.get("presentInLogs")==true) {
+					isPresentInLogs = true;
+				}
+			}	
+		} catch (Exception e) {
+			regProcLogger.error("Internal Error occured while contacting gateway service for PRN status. "
+					+ ExceptionUtils.getStackTrace(e));
+		}
+		return isPresentInLogs;
+
 	}
 
-	private boolean consumePrn(String prn, String regId) throws Exception {
+	/**
+	 * This method calls an external API to consume a PRN
+	 * 
+	 * @param consumePrnRequestDTO
+	 * @return consumption status
+	 */
+	@SuppressWarnings("unchecked")
+	private boolean consumePrn(ConsumePrnRequestDTO consumePrnRequestDTO) {
+		regProcLogger.info(
+				"In Registration Processor - Payment Validator - Consuming of PRN and addition into transaction logs");
+		HashMap<String, Boolean> responseMap = null;
+		try {
+			regProcLogger.info("Request {} :" + consumePrnRequestDTO.toString());
+			ResponseWrapper<?> response = restApiClient.postApi(consumePrnApiUrl, MediaType.APPLICATION_JSON, consumePrnRequestDTO,
+					ResponseWrapper.class);
+			regProcLogger.info(
+					"In Registration Processor - Payment Validator - response for consumeprn: " + response.toString());
 
-		ConsumePrnRequestDTO consumePrnRequestDTO = new ConsumePrnRequestDTO();
-		consumePrnRequestDTO.setPrnNum(prn);
-		consumePrnRequestDTO.setRegId(regId);
-
-		return prnConsumedService.consumePrnAsUsed(consumePrnRequestDTO);
+			if (response != null && response.getResponse() != null) {
+				responseMap = (HashMap<String, Boolean>) response.getResponse();
 				
+				return responseMap.get("consumedStatus");
+			}
+
+		} catch (Exception e) {
+			regProcLogger.error("Internal Error occured contacting gateway service for PRN consumption. "
+					+ ExceptionUtils.getStackTrace(e));
+		}
+
+		return false;
+
+	}
+	
+	/**
+	 * This method calls an external API to check for the status of a PRN 
+	 * 
+	 * 
+	 * @param prn
+	 * @return PrnStatusResponseDTO
+	 */
+	private PrnStatusResponseDTO checkPrnStatus(String prn) {
+		regProcLogger.info(
+				"In Registration Processor - Payment Validator - Checking payment gateway service for PRN status");
+
+		PrnStatusRequestDTO prnStatusRequestDTO = new PrnStatusRequestDTO();
+		prnStatusRequestDTO.setPRN(prn);
+		PrnStatusResponseDTO response = null;
+
+		try {
+			response = restApiClient.postApi(getPrnStatusApiUrl, MediaType.APPLICATION_JSON, prnStatusRequestDTO,
+					PrnStatusResponseDTO.class);
+		} catch (Exception e) {
+			regProcLogger.error("Internal Error occured while contacting gateway service for PRN status. "
+					+ ExceptionUtils.getStackTrace(e));
+		}
+		return response;
+	}
+	
+	/**
+	 * This method validates the PRN taxhead against the registration type i.e. LOST, UPDATE
+	 * 
+	 * @param response
+	 * @param regType
+	 * @return status
+	 */
+	private boolean validateTaxHeadAndRegType(PrnStatusResponseDataDTO response, String regType) {
+		
+		if(regType.equalsIgnoreCase(response.getProcessFlow())) {
+			if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_CHANGE.getTaxHeadCode())){
+				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_CHANGE.getAmountPaid())) {
+					return true;
+				}
+			}
+			else if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_CORRECTION_ERRORS.getTaxHeadCode())){
+				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_CORRECTION_ERRORS.getAmountPaid())) {
+					return true;
+				}
+			}
+			else if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_REPLACE.getTaxHeadCode())){
+				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_REPLACE.getAmountPaid())) {
+					return true;
+				}
+			}
+			else if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_REPLACE_DEFACED.getTaxHeadCode())){
+				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_REPLACE_DEFACED.getAmountPaid())) {
+					return true;
+				}
+			}
+			else {
+				return false;
+			}
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * This method sends notification to applicant based on successful and failed processing of payment check
+	 */
+	private void sendNotification() {
+		
 	}
 
 }

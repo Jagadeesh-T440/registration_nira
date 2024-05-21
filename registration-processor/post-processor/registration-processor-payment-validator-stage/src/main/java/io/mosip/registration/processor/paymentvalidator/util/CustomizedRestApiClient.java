@@ -27,6 +27,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.common.OAuth2AccessToken;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -68,6 +69,18 @@ public class CustomizedRestApiClient {
 	/** The builder. */
 	@Autowired
 	RestTemplateBuilder builder;
+	
+	@Value("${security.oauth2.client.client-id}")
+	private String gatewayClientId;
+	
+	@Value("${security.oauth2.client.access-token-uri}")
+	private String gatewayTokenUrl;
+	
+	@Value("${security.oauth2.client.client-secret}")
+	private String gatewayClientSecret;
+	
+	@Value("${security.oauth2.client.grant-type}")
+	private String gatewayGrantType;
 
 	@Autowired
 	Environment environment;
@@ -225,8 +238,11 @@ public class CustomizedRestApiClient {
 	@SuppressWarnings("unchecked")
 	private HttpEntity<Object> setRequestHeader(Object requestType, MediaType mediaType) throws IOException {
 		MultiValueMap<String, String> headers = new LinkedMultiValueMap<String, String>();
-		// headers.add("Cookie", getToken());
-		headers.add("Authorization", "Basic YWRtaW46YWRtaW4=");
+		//headers.add("", getToken());
+		
+		/* include token handlers for new token from nira-payment-realm*/
+		//headers.add("Authorization", "Basic YWRtaW46YWRtaW4=");
+		headers.add("Authorization", getAccessToken());
 		headers.add(TracingConstant.TRACE_HEADER, (String) ContextualData.getOrDefault(TracingConstant.TRACE_ID_KEY));
 		if (mediaType != null) {
 			headers.add("Content-Type", mediaType.toString());
@@ -258,7 +274,7 @@ public class CustomizedRestApiClient {
 	 * @return
 	 * @throws IOException
 	 */
-	public String getToken() throws IOException {
+	/*public String getToken() throws IOException {
 		String token = System.getProperty("token");
 		boolean isValid = false;
 
@@ -311,7 +327,8 @@ public class CustomizedRestApiClient {
 		request.setSecretKey(environment.getProperty("token.request.secretKey"));
 		return request;
 	}
-
+	*/
+	
 	public void tokenExceptionHandler(Exception e) {
 		if (e instanceof HttpStatusCodeException) {
 			HttpStatusCodeException ex = (HttpStatusCodeException) e;
@@ -322,5 +339,40 @@ public class CustomizedRestApiClient {
 			}
 		}
 	}
+	
+	
+	
+	
+	public String getAccessToken() {
+        /*String keycloakTokenUrl = "http://localhost:8180/realms/payment-gateway/protocol/openid-connect/token";
+        String clientId = "nira-payment-gateway";
+        String clientSecret = "qMzGHjLvdHrBdzX1RxrGgm6kGebEaJSq";
+        String grantType = "client_credentials";*/
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.set(gatewayClientId, gatewayClientSecret);
+
+
+        String requestBody = "grant_type=" + gatewayGrantType;
+
+        HttpEntity<String> request = new HttpEntity<>(requestBody, headers);
+
+        @SuppressWarnings("deprecation")
+		ResponseEntity<OAuth2AccessToken> response = localRestTemplate.postForEntity(gatewayTokenUrl, request, OAuth2AccessToken.class);
+
+        if (response.getStatusCode().is2xxSuccessful()) {
+            OAuth2AccessToken accessToken = response.getBody();
+            if (accessToken != null) {
+                return  AUTHORIZATION + accessToken.getValue();
+            } else {
+                // Handle case where token response body is null
+                return null;
+            }
+        } else {
+            // Handle error response from token endpoint
+            return null;
+        }
+    }
 
 }
