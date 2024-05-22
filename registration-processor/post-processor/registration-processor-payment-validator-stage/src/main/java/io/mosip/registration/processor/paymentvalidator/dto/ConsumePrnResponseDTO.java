@@ -20,7 +20,7 @@ public class ConsumePrnResponseDTO implements Serializable{
 	
 	private String prnNum;
 	private String regId;
-	private Boolean consumedStatus;
+	private boolean consumedStatus;
 
 }
 

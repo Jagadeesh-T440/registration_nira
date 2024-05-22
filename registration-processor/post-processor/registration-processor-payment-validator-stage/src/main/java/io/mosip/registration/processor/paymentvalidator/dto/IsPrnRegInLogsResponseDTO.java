@@ -2,18 +2,14 @@ package io.mosip.registration.processor.paymentvalidator.dto;
 
 import java.io.Serializable;
 
-import org.json.simple.JSONObject;
-
+import lombok.Data;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.ToString;
 
-@Getter
+@Data
 @Setter
-@NoArgsConstructor
-@ToString
-public class ConsumePrnRequestDTO implements Serializable{
+@Getter
+public class IsPrnRegInLogsResponseDTO implements Serializable{
 
 	/**
 	 * 
@@ -22,5 +18,6 @@ public class ConsumePrnRequestDTO implements Serializable{
 	
 	private String prn;
 	private String regId;
+	private boolean isPresentInLogs;
 
 }
