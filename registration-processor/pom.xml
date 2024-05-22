@@ -386,7 +386,7 @@
 		<module>stage-groups</module>
         <module>workflow-engine</module>
         <module>registration-processor-landing-zone</module>
-        <module>registration-processor-payment-service</module>
+        <!--<module>registration-processor-payment-service</module>-->
 	</modules>
 	<build>
 			<plugins>

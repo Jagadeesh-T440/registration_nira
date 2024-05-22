@@ -31,11 +31,11 @@
 		  <artifactId>kernel-auth-adapter</artifactId>
 		  <version>1.2.0.1-B3</version>
 		</dependency>
-		<dependency>
+		<!--<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
 			<artifactId>registration-processor-payment-validator-stage</artifactId>
 			<version>1.2.0.1</version>
-		</dependency>
+		</dependency>-->
 		<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
 			<artifactId>registration-processor-finalization-stage</artifactId>
@@ -44,6 +44,16 @@
 		<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
 			<artifactId>registration-processor-credential-requestor-stage</artifactId>
+			<version>1.2.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>io.mosip.registrationprocessor</groupId>
+			<artifactId>registration-processor-citizenship-verification-stage</artifactId>
+			<version>1.2.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>io.mosip.registrationprocessor</groupId>
+			<artifactId>registration-processor-uin-generator-stage</artifactId>
 			<version>1.2.0.1</version>
 		</dependency>
     </dependencies>
