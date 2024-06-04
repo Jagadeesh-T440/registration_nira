@@ -350,6 +350,8 @@ public class CitizenshipVerificationProcessor {
 	    }
 	}
 	
+	
+	
 	private Map<String, String> extractApplicantDemographics(Map<String, String> applicantFields) {
 	    Map<String, String> person2Map = new HashMap<>();
 	    person2Map.put(MappingJsonConstants.PERSON, "Applicant");
