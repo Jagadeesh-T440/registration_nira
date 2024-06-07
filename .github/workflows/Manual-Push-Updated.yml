@@ -1,4 +1,4 @@
-name: Maven Package upon a push
+name: Manual Push with new Stages
 
 on:
   release:
