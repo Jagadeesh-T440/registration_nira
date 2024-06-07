@@ -1,5 +1,6 @@
 package io.mosip.registration.processor.paymentvalidator.util;
 
+import java.io.Console;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Iterator;
@@ -243,6 +244,7 @@ public class CustomizedRestApiClient {
 		/* include token handlers for new token from nira-payment-realm*/
 		//headers.add("Authorization", "Basic YWRtaW46YWRtaW4=");
 		headers.add("Authorization", getAccessToken());
+		logger.info("Generated token for payment gateway service: " + getAccessToken());
 		headers.add(TracingConstant.TRACE_HEADER, (String) ContextualData.getOrDefault(TracingConstant.TRACE_ID_KEY));
 		if (mediaType != null) {
 			headers.add("Content-Type", mediaType.toString());
