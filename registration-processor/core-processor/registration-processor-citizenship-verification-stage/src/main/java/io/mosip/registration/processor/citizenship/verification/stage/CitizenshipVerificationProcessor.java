@@ -262,7 +262,18 @@ public class CitizenshipVerificationProcessor {
 	        }
 
 	        String livingStatusKey = (parentType.equals("FATHER") ? MappingJsonConstants.FATHER_LIVINGSTATUS : MappingJsonConstants.MOTHER_LIVINGSTATUS);
-	        String livingStatus = applicantFields.getOrDefault(livingStatusKey, "UNKNOWN");
+	        String jsonlivingStatus = applicantFields.getOrDefault(livingStatusKey, "UNKNOWN");
+	        
+	        String livingStatus = "UNKNOWN";
+	        try {
+	            if (!jsonlivingStatus.equals("UNKNOWN")) {
+	                List<Map<String, String>> livingStatusList = objectMapper.readValue(jsonlivingStatus, new TypeReference<List<Map<String, String>>>() {});
+	                livingStatus = livingStatusList.get(0).get("value");
+	            }
+	        } catch (Exception e) {
+	            regProcLogger.error("Error parsing living status JSON", e);
+	        }
+	        
 	        regProcLogger.info("Living status retrieved: " + livingStatus);
 	        
 	        String status = utility.retrieveIdrepoJsonStatus(parentNin);
@@ -283,16 +294,12 @@ public class CitizenshipVerificationProcessor {
 	            return false;
 	        }
 
-	        JSONObject demographics = (JSONObject) parentInfoJson.get("demographics");
-	        if (demographics == null) {
-	            regProcLogger.error("Demographics information is missing for " + parentType + ".");
-	            return false;
-	        }
 
 	        Map<String, String> person1Map = extractDemographics(parentType, parentInfoJson);
 	        regProcLogger.info("Extracted demographics for {}: {}", parentType, person1Map);
+	        
 	        Map<String, String> person2Map = extractApplicantDemographics(applicantFields);
-	        regProcLogger.info("Extracted demographics for {}: {}", parentType, person2Map);
+	        regProcLogger.info("Applicant Extracted demographics for {}: {}", parentType, person2Map);
 
 	        return ValidateTribeAndClan(person1Map, person2Map);
 	    } catch (Exception e) {
@@ -308,32 +315,84 @@ public class CitizenshipVerificationProcessor {
 	        return null;
 	    }
 	}
+	
+	
 
-	private Map<String, String> extractDemographics(String parentType, JSONObject demographics) {
-	    Map<String, String> Person1Map = new HashMap<>();
-	    Person1Map.put(MappingJsonConstants.PERSON, parentType + " in NIRA System");
-	    Person1Map.put(MappingJsonConstants.TRIBE, demographics.get(MappingJsonConstants.PARENT_TRIBE)!= null ? demographics.get(MappingJsonConstants.PARENT_TRIBE).toString() : null);
-	    Person1Map.put(MappingJsonConstants.CLAN, demographics.get(MappingJsonConstants.PARENT_CLAN)!= null ? demographics.get(MappingJsonConstants.PARENT_CLAN).toString() : null);
-	    Person1Map.put(MappingJsonConstants.PLACE_OF_ORIGIN, demographics.get(MappingJsonConstants.PARENT_PLACE_OF_ORIGIN)!= null ? demographics.get(MappingJsonConstants.PARENT_PLACE_OF_ORIGIN).toString() : null);
-	    return Person1Map;
+	private Map<String, String> extractDemographics(String parentType, JSONObject parentInfoJson) {
+	    Map<String, String> person1Map = new HashMap<>();
+	    person1Map.put(MappingJsonConstants.PERSON, parentType + " in NIRA System");
+	    ObjectMapper objectMapper = new ObjectMapper();
+
+	    // Helper method to extract and parse JSON values
+	    extractAndPutValue(person1Map, MappingJsonConstants.TRIBE, parentInfoJson, MappingJsonConstants.PARENT_TRIBE, objectMapper);
+	    extractAndPutValue(person1Map, MappingJsonConstants.CLAN, parentInfoJson, MappingJsonConstants.PARENT_CLAN, objectMapper);
+	    extractAndPutValue(person1Map, MappingJsonConstants.PLACE_OF_ORIGIN, parentInfoJson, MappingJsonConstants.PARENT_PLACE_OF_ORIGIN, objectMapper);
+
+	    return person1Map;
 	}
 
+	private void extractAndPutValue(Map<String, String> map, String key, JSONObject jsonObject, String jsonKey, ObjectMapper objectMapper) {
+	    String jsonString = null;
+	    try {
+	        jsonString = jsonObject.get(jsonKey).toString();
+	    } catch (Exception e) {
+	        // Handle missing key or other exception
+	    }
+	    if (jsonString != null && !jsonString.isEmpty()) {
+	        try {
+	            List<Map<String, String>> list = objectMapper.readValue(jsonString, new TypeReference<List<Map<String, String>>>() {});
+	            if (!list.isEmpty()) {
+	                map.put(key, list.get(0).get("value"));
+	            }
+	        } catch (Exception e) {
+	            // Handle exception
+	        }
+	    }
+	}
+	
+	
+	
 	private Map<String, String> extractApplicantDemographics(Map<String, String> applicantFields) {
-	    Map<String, String> Person2Map = new HashMap<>();
-	    Person2Map.put(MappingJsonConstants.PERSON, "Applicant");
-	    Person2Map.put(MappingJsonConstants.TRIBE, applicantFields.get(MappingJsonConstants.APPLICANT_TRIBE));
-	    Person2Map.put(MappingJsonConstants.CLAN, applicantFields.get(MappingJsonConstants.APPLICANT_CLAN));
-	    Person2Map.put(MappingJsonConstants.PLACE_OF_ORIGIN, applicantFields.get(MappingJsonConstants.APPLICANT_PLACE_OF_ORIGIN));
-	    return Person2Map;
+	    Map<String, String> person2Map = new HashMap<>();
+	    person2Map.put(MappingJsonConstants.PERSON, "Applicant");
+	    ObjectMapper objectMapper = new ObjectMapper();
+
+	    // Helper method to extract and parse JSON values
+	    extractAndPutValue(person2Map, MappingJsonConstants.TRIBE, applicantFields.get(MappingJsonConstants.APPLICANT_TRIBE), objectMapper);
+	    extractAndPutValue(person2Map, MappingJsonConstants.CLAN, applicantFields.get(MappingJsonConstants.APPLICANT_CLAN), objectMapper);
+	    extractAndPutValue(person2Map, MappingJsonConstants.PLACE_OF_ORIGIN, applicantFields.get(MappingJsonConstants.APPLICANT_PLACE_OF_ORIGIN), objectMapper);
+
+	    return person2Map;
 	}
 
+	private void extractAndPutValue(Map<String, String> map, String key, String jsonString, ObjectMapper objectMapper) {
+	    if (jsonString != null && !jsonString.isEmpty()) {
+	        try {
+	            List<Map<String, String>> list = objectMapper.readValue(jsonString, new TypeReference<List<Map<String, String>>>() {});
+	            if (!list.isEmpty()) {
+	                map.put(key, list.get(0).get("value"));
+	            }
+	        } catch (Exception e) {
+	            // Handle exception
+	        }
+	    }
+	}
+	
+	
+	
 	
 	private boolean ValidateTribeAndClan(Map<String, String> person1, Map<String, String> person2) {
 		Boolean isValid = false;
+		
 		if (person1.get(MappingJsonConstants.TRIBE).equalsIgnoreCase(person2.get(MappingJsonConstants.TRIBE))) {
+			regProcLogger.info("Tribe validation passed for " + person1.get(MappingJsonConstants.PERSON) + " and " + person2.get(MappingJsonConstants.PERSON));
+			
 			if (person1.get(MappingJsonConstants.CLAN).equalsIgnoreCase(person2.get(MappingJsonConstants.CLAN))) {
+				 regProcLogger.info("Clan validation passed for " + person1.get(MappingJsonConstants.PERSON) + " and " + person2.get(MappingJsonConstants.PERSON));
+				 
 				if (person1.get(MappingJsonConstants.PLACE_OF_ORIGIN)
 						.equalsIgnoreCase(person2.get(MappingJsonConstants.PLACE_OF_ORIGIN))) {
+					regProcLogger.info("Place of origin validation passed for " + person1.get(MappingJsonConstants.PERSON) + " and " + person2.get(MappingJsonConstants.PERSON));
 					isValid = true;
 				} else {
 					regProcLogger.error("Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
