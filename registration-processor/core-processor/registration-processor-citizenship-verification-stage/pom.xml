@@ -48,9 +48,7 @@
 		</dependency>
 		<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
-			<artifactId>
-				registration-processor-packet-manager
-			</artifactId>
+			<artifactId>registration-processor-packet-manager</artifactId>
 			<version>1.2.0.1</version>
 		</dependency>
 	</dependencies>
