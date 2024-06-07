@@ -19,7 +19,7 @@ on:
 
 jobs:
   build-maven-registration:
-    uses: mosip/kattu/.github/workflows/maven-build.yml@niradev
+    uses: mosip/kattu/.github/workflows/maven-build.yml@master
     with:
       SERVICE_LOCATION: ./registration-processor
       BUILD_ARTIFACT: registration
