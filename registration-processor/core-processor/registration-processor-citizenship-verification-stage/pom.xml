@@ -6,6 +6,8 @@
     <version>1.2.0.1</version>
   </parent>
   <artifactId>registration-processor-citizenship-verification-stage</artifactId>
+  <name>registration-processor-citizenship-verification-stage</name>
+  <version>1.2.0.1</version>
   <dependencies>
   		<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
