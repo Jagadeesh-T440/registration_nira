@@ -482,36 +482,42 @@ public class CitizenshipVerificationProcessor {
 
 	private boolean handleDeceasedStatus(StatusForNinandLivivngStatus uinstatusAsEnum) {
 	 // Logic for handling DECEASED status with respect to UIN status
+		try {
+			
 	    if (StatusForNinandLivivngStatus.ACTIVATED.equals(uinstatusAsEnum)) {
 	        sendNotification(null, null);
 	        return true; // Assuming continuation despite the discrepancy
 	    } else if (StatusForNinandLivivngStatus.DEACTIVATED.equals(uinstatusAsEnum)) {
 	        return true; // Valid scenario
 	    } else {
-	        regProcLogger.error("Unexpected UIN status for deceased individual.");
+	    	 regProcLogger.error("Unexpected UIN status for deceased individual: " + uinstatusAsEnum);
 	        return false;
 	    }
-	}
+	} catch (Exception e) {
+        regProcLogger.error("Error handling deceased status: " + e.getMessage());
+        return false;
+    }
+}
 
 	private void sendNotification(SyncRegistrationEntity regEntity,
 			  InternalRegistrationStatusDto registrationStatusDto) {
 	    try {
-	     
-			
 			String registrationId = registrationStatusDto.getRegistrationId();
-			if (regEntity.getOptionalValues() != null);
+			
+			if (regEntity.getOptionalValues() != null) {
 			
 			InputStream inputStream = new ByteArrayInputStream(regEntity.getOptionalValues());;
 			InputStream decryptedInputStream = decryptor.decrypt(
 						registrationId,
 						utility.getRefId(registrationId, regEntity.getReferenceId()),
-						inputStream );;
+						inputStream );
 			String decryptedData = IOUtils.toString(decryptedInputStream, StandardCharsets.UTF_8);
 			RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO = (RegistrationAdditionalInfoDTO) JsonUtils
 					.jsonStringToJavaObject(RegistrationAdditionalInfoDTO.class, decryptedData);
 			String[] allNotificationTypes = notificationTypes.split("\\|");
 			
 			notificationutility.sendNotification(registrationAdditionalInfoDTO, registrationStatusDto, regEntity, allNotificationTypes);
+			}
 	    } catch (Exception e) {
 	        regProcLogger.error("Send notification failed for rid: " + e.getMessage());
 	        
