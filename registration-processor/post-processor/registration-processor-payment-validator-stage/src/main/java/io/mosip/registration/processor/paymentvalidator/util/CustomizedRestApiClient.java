@@ -28,6 +28,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.client.OAuth2RestTemplate;
 import org.springframework.security.oauth2.common.OAuth2AccessToken;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -365,6 +366,7 @@ public class CustomizedRestApiClient {
 
         if (response.getStatusCode().is2xxSuccessful()) {
             OAuth2AccessToken accessToken = response.getBody();
+            logger.info("accessToken: " + accessToken);
             if (accessToken != null) {
                 return  AUTHORIZATION + accessToken.getValue();
             } else {

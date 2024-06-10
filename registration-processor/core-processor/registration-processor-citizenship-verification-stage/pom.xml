@@ -6,6 +6,8 @@
     <version>1.2.0.1</version>
   </parent>
   <artifactId>registration-processor-citizenship-verification-stage</artifactId>
+  <name>registration-processor-citizenship-verification-stage</name>
+  <version>1.2.0.1</version>
   <dependencies>
   		<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
@@ -37,20 +39,13 @@
 			<artifactId>kernel-core</artifactId>
 			<version>${kernel.core.version}</version>
 		</dependency>
-			<dependency>
-			<groupId>io.mosip.registrationprocessor</groupId>
-			<artifactId>registration-processor-packet-manager</artifactId>
-			<version>${packet.manager.version}</version>
-		</dependency>
 		<dependency>
 			<groupId>com.googlecode.json-simple</groupId>
 			<artifactId>json-simple</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.mosip.registrationprocessor</groupId>
-			<artifactId>
-				registration-processor-packet-manager
-			</artifactId>
+			<artifactId>registration-processor-packet-manager</artifactId>
 			<version>1.2.0.1</version>
 		</dependency>
 	</dependencies>
