@@ -174,7 +174,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 										if(checkTranscLogs(prnNum, regId)) {
 											/* Check for re-processing of packet */
 											if(!registrationStatusDto.getStatusCode().equals("PROCESSED")
-												|| !registrationStatusDto.getStatusCode().equals("PROCESSING")) {
+													&& !registrationStatusDto.getStatusCode().equals("PROCESSING")) {
 												
 												object.setIsValid(Boolean.TRUE);
 												regProcLogger.info(
@@ -323,7 +323,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 			if (response != null && response.getResponse() != null) {
 				responseMap = (HashMap<String, Boolean>) response.getResponse();
 				
-				return responseMap.get("consumedStatus");
+				return responseMap.get("consumedSucess");
 			}
 
 		} catch (Exception e) {
