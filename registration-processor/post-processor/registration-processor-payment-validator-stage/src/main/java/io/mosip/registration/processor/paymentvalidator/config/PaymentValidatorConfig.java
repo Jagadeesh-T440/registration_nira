@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 @SuppressWarnings("deprecation")
 @EnableOAuth2Client
 @Configuration
-@Slf4j
 public class PaymentValidatorConfig {
 	
 	
@@ -30,15 +29,6 @@ public class PaymentValidatorConfig {
 
 	@Value("${security.oauth2.client.client-secret}")
 	private String clientSecret;
-
-	/*@Value("${security.oauth2.client.password-token}")
-	private String passwordToken;*/
-
-	@Value("${security.user.name}")
-	private String username;
-
-	@Value("${security.user.password}")
-	private String password;
 	
 	@Value("${security.oauth2.client.grant-type}")
 	private String gatewayGrantType;
