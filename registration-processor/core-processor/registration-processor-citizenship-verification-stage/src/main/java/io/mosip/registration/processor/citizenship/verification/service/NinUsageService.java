@@ -3,6 +3,7 @@ package io.mosip.registration.processor.citizenship.verification.service;
 
 import io.mosip.kernel.core.util.HMACUtils2;
 import io.mosip.registration.processor.citizenship.verification.constants.FamilyNINUsageLimitConstant;
+import io.mosip.registration.processor.citizenship.verification.constants.Relationship;
 import io.mosip.registration.processor.citizenship.verification.entity.NinUsageEntity;
 import io.mosip.registration.processor.citizenship.verification.repository.NinUsageRepository;
 
@@ -20,7 +21,10 @@ public class NinUsageService {
     private NinUsageRepository ninUsageRepository;
 
     public boolean isNinUsedMorethanNtimes(String nin, String relation) throws NoSuchAlgorithmException {
-		int limit = FamilyNINUsageLimitConstant.valueOf(relation).getLimit();
+    	//int limit = FamilyNINUsageLimitConstant.fromString(relation).getLimit();
+		//int limit = FamilyNINUsageLimitConstant.valueOf(relation).getLimit();
+    	Relationship relationshipEnum = Relationship.fromString(relation);
+        int limit = FamilyNINUsageLimitConstant.fromRelationship(relationshipEnum).getLimit();
 		String hashSequence = HMACUtils2.digestAsPlainText(nin.getBytes(StandardCharsets.UTF_8));
         NinUsageEntity ninUsageEntity = ninUsageRepository.findByNin(hashSequence);
 
