@@ -138,5 +138,8 @@ public final class StatusConstants {
 
 	public static final String VERIFICATION_STAGE = RPR_REGISTRATION_PROCESSOR_PREFIX + "VER-";
 
-
+	// Payment Validator stage
+	public static final String PAYMENT_VALIDATOR_STAGE = RPR_REGISTRATION_PROCESSOR_PREFIX + "PV-";
+	public static final String PAYMENT_VALIDATOR_STAGE_SUCCESS = PAYMENT_VALIDATOR_STAGE + SUCCESS;
+	public static final String PAYMENT_VALIDATOR_STAGE_FAILED = PAYMENT_VALIDATOR_STAGE + FAILED;
 }
