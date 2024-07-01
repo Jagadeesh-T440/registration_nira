@@ -1,5 +1,6 @@
 package io.mosip.registration.processor.citizenship.verification.constants;
 
+//nin usage limit tested and works as expected
 public enum FamilyNINUsageLimitConstant {
 	FATHER(Relationship.FATHER, 20),
     MOTHER(Relationship.MOTHER, 20),

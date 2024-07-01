@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.commons.io.IOUtils;
-
+import org.apache.commons.lang3.exception.ExceptionUtils;
 
 import java.io.ByteArrayInputStream;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,11 +28,13 @@ import io.mosip.registration.processor.citizenship.verification.service.NinUsage
 import io.mosip.registration.processor.citizenship.verification.util.NotificationUtility;
 import io.mosip.registration.processor.core.abstractverticle.MessageBusAddress;
 import io.mosip.registration.processor.core.abstractverticle.MessageDTO;
+import io.mosip.registration.processor.core.constant.LoggerFileConstant;
 import io.mosip.registration.processor.core.constant.MappingJsonConstants;
 import io.mosip.registration.processor.core.constant.ProviderStageName;
 import io.mosip.registration.processor.core.exception.ApisResourceAccessException;
 import io.mosip.registration.processor.core.exception.PacketManagerException;
 import io.mosip.registration.processor.core.exception.util.PlatformErrorMessages;
+import io.mosip.registration.processor.core.exception.util.PlatformSuccessMessages;
 import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 
 import io.mosip.registration.processor.core.util.RegistrationExceptionMapperUtil;
@@ -156,7 +158,7 @@ public class CitizenshipVerificationProcessor {
 			
 			
 			
-			applicantFields.put(MappingJsonConstants.GUARDIAN_LIVING_STATUS, "Alive");
+			applicantFields.put(MappingJsonConstants.GUARDIAN_LIVING_STATUS, "Deceased");
 			
 
 			regProcLogger.info("fields fetched {}: " + applicantFields.toString());
@@ -481,27 +483,37 @@ public class CitizenshipVerificationProcessor {
 	    }
 	}
 
-	private boolean handleDeceasedStatus(StatusForNinandLivivngStatus uinstatusAsEnum) {
 	
-		try {
-			
-	    if (StatusForNinandLivivngStatus.ACTIVATED.equals(uinstatusAsEnum)) {
-	        sendNotification(null, null);
-	        return true; 
-	    } else if (StatusForNinandLivivngStatus.DEACTIVATED.equals(uinstatusAsEnum)) {
-	        return true; 
-	    } else {
-	    	 regProcLogger.error("Unexpected UIN status for deceased individual: " + uinstatusAsEnum);
+	
+
+	private boolean handleDeceasedStatus(StatusForNinandLivivngStatus uinstatusAsEnum) {
+	    try {
+//	        RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO = getRegistrationAdditionalInfoDTO();
+//	        InternalRegistrationStatusDto registrationStatusDto = getRegistrationStatusDto();
+//	        SyncRegistrationEntity regEntity = getRegEntity();
+//	        String[] allNotificationTypes = getNotificationTypes();
+
+	        if (StatusForNinandLivivngStatus.ACTIVATED.equals(uinstatusAsEnum)) {
+	            sendNotification(null, null, null, null);
+	            return true;
+	        } else if (StatusForNinandLivivngStatus.DEACTIVATED.equals(uinstatusAsEnum)) {
+	            // Add any specific handling for DEACTIVATED status if needed
+	            return true;
+	        } else {
+	            regProcLogger.error("Unexpected UIN status for deceased individual: " + uinstatusAsEnum);
+	            return false;
+	        }
+	    } catch (Exception e) {
+	        regProcLogger.error("Error handling deceased status: " + e.getMessage(), e);
 	        return false;
 	    }
-	} catch (Exception e) {
-        regProcLogger.error("Error handling deceased status: " + e.getMessage());
-        return false;
-    }
-}
+	}
 
-	private void sendNotification(SyncRegistrationEntity regEntity,
-			  InternalRegistrationStatusDto registrationStatusDto) {
+	
+	
+
+	private void sendNotification(RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO, InternalRegistrationStatusDto registrationStatusDto,
+			  SyncRegistrationEntity regEntity, String[] allNotificationTypes) {
 	    try {
 			String registrationId = registrationStatusDto.getRegistrationId();
 			
@@ -513,11 +525,11 @@ public class CitizenshipVerificationProcessor {
 						utility.getRefId(registrationId, regEntity.getReferenceId()),
 						inputStream );
 			String decryptedData = IOUtils.toString(decryptedInputStream, StandardCharsets.UTF_8);
-			RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO = (RegistrationAdditionalInfoDTO) JsonUtils
+			RegistrationAdditionalInfoDTO registrationAdditionalInfoDTO1 = (RegistrationAdditionalInfoDTO) JsonUtils
 					.jsonStringToJavaObject(RegistrationAdditionalInfoDTO.class, decryptedData);
-			String[] allNotificationTypes = notificationTypes.split("\\|");
+			String[] allNotificationTypes1 = notificationTypes.split("\\|");
 			
-			notificationutility.sendNotification(registrationAdditionalInfoDTO, registrationStatusDto, regEntity, allNotificationTypes);
+			notificationutility.sendNotification(registrationAdditionalInfoDTO1, registrationStatusDto, regEntity, allNotificationTypes1);
 			}
 	    } catch (Exception e) {
 	        regProcLogger.error("Send notification failed for rid: " + e.getMessage());
@@ -525,10 +537,7 @@ public class CitizenshipVerificationProcessor {
 	    }
 	}
 
-
-
-
-
+	
 	private boolean checkApplicantAgeWithParentOrGuardian(LocalDate applicantDob, LocalDate parentOrGuardianDob,
 			int ageCondition) {
 		return (Period.between(parentOrGuardianDob, applicantDob).getYears() >= ageCondition);
@@ -881,6 +890,7 @@ public class CitizenshipVerificationProcessor {
 		if (!isValidStatus) {
 		    // Log an error or take other actions as needed
 		    regProcLogger.error("Status check failed.");
+		    return false; // Stop further processing if status check failed
 		}
 
 		boolean isValidGuardian = true; // Assume the guardian's information is valid initially.
@@ -892,18 +902,7 @@ public class CitizenshipVerificationProcessor {
 
 		    Map<String, String> guardian2Map = extractApplicantDemographicss(applicantFields);
 		    regProcLogger.info("Extracted demographics for applicant: {}", guardian2Map);
-	
-//		Map<String, String> guardian1Map = new HashMap<>();
-//		guardian1Map.put(MappingJsonConstants.PERSON, "Guardian in NIRA System");
-//		guardian1Map.put(MappingJsonConstants.TRIBE,guardianInfo.get(MappingJsonConstants.GUARDIAN_TRIBE)!= null ? guardianInfo.get(MappingJsonConstants.GUARDIAN_TRIBE).toString(): null );
-//		guardian1Map.put(MappingJsonConstants.CLAN,guardianInfo.get(MappingJsonConstants.GUARDIAN_CLAN)!= null ? guardianInfo.get(MappingJsonConstants.GUARDIAN_CLAN).toString(): null);
-//		
-//		
-//		Map<String, String> guardian2Map = new HashMap<>();
-//		guardian2Map.put(MappingJsonConstants.PERSON, "Guardian in Form");
-//		guardian2Map.put(MappingJsonConstants.TRIBE,applicantFields.get(MappingJsonConstants.GUARDIAN_TRIBE_FORM));
-//		guardian2Map.put(MappingJsonConstants.CLAN,applicantFields.get(MappingJsonConstants.GUARDIAN_CLAN_FORM));
-//		
+		
 		
 		isValidStatus = ValidateguardianTribeAndClan(guardian1Map, guardian2Map);
 

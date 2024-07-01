@@ -28,7 +28,7 @@ public class NinUsageService {
 		String hashSequence = HMACUtils2.digestAsPlainText(nin.getBytes(StandardCharsets.UTF_8));
         NinUsageEntity ninUsageEntity = ninUsageRepository.findByNin(hashSequence);
 
-        if(!Objects.isNull(ninUsageEntity)){
+        if (ninUsageEntity != null){
         	if(ninUsageEntity.getUsageCount() >= limit) {
         		return true;
         	} else {
