@@ -1455,7 +1455,10 @@ public enum PlatformErrorMessages {
 	RPR_PYVS_CONSUMPTION_FAILED(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "008", "PRN consumption failed"),
 	RPR_PYVS_GATEWAY_SERVICE_ACCESS_FAILED(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "009", "Failed to access Payment gateway API"),
 	RPR_PYVS_PRN_STATUS_REQUEST_FAILED(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "010", "PRN status request failed"),
-	RPR_PYVS_IDREPO_UIN_RETRIEVAL_FAILED(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "011", "UIN details retrieval from IDRepo failed")
+	RPR_PYVS_IDREPO_UIN_RETRIEVAL_FAILED(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "011", "UIN details retrieval from IDRepo failed"), 
+	
+	// Citizenship Verification stage
+	RPR_CITIZENSHIP_VERIFICATION_FAILED(PlatformConstants.RPR_CITIZENSHIP_VERIFICATION_MODULE + "001", "Citizenship Verification failed")
 	
 	;
 

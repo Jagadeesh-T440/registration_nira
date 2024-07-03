@@ -141,6 +141,8 @@ public final class PlatformConstants {
 	
 	public static final String RPR_PAYMENT_VALIDATOR_STAGE = RPR_REGISTRATION_PROCESSOR_PREFIX + "PAYMENT_VALIDATOR";
 
+	public static final String RPR_CITIZENSHIP_VERIFICATION_MODULE = RPR_REGISTRATION_PROCESSOR_PREFIX + "CV-";
+
 	/**
 	 * Instantiates a new RPR platform error codes.
 	 */

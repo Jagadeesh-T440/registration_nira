@@ -177,7 +177,10 @@ public enum PlatformSuccessMessages {
 	PACKET_ANONYMOUS_PROFILE(PlatformConstants.RPR_CAMEL_BRIDGE_MODULE + "008",
 			"Packet anonymous profile flow initiated"),
 	
-	RPR_PAYMENT_VALIDATOR_STAGE_SUCCESS(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "000", "Payment Validation Success");
+	RPR_PAYMENT_VALIDATOR_STAGE_SUCCESS(PlatformConstants.RPR_PAYMENT_VALIDATOR_STAGE + "000", "Payment Validation Success"), 
+	
+	RPR_CITIZENSHIP_VERIFICATION_SUCCESS(PlatformConstants.RPR_CITIZENSHIP_VERIFICATION_MODULE + "001",
+"Citizenship Verification successful"),;
 
 	/** The success message. */
 	private final String successMessage;

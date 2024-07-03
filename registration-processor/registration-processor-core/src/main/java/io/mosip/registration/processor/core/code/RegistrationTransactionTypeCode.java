@@ -67,5 +67,7 @@ public enum RegistrationTransactionTypeCode {
 	/** The workflow resume. */
 	WORKFLOW_RESUME,
 	/** The uin finalization  */
-	FINALIZATION;
+	FINALIZATION, 
+	
+	CITIZENSHIP_VERIFICATION,
 }
