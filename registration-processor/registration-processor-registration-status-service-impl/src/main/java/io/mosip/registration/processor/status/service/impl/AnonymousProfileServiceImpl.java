@@ -167,6 +167,13 @@ public class AnonymousProfileServiceImpl implements AnonymousProfileService {
 		if (fieldMap.get(genderValue) != null)
 			anonymousProfileDTO.setGender(getLanguageBasedValueForSimpleType(fieldMap.get(genderValue), language));
 
+		// set citizenshipType
+		String citizenshipValue = JsonUtil.getJSONValue(
+				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.APPLICANT_CITIZENSHIPTYPE),
+				MappingJsonConstants.VALUE);
+		if (fieldMap.get(citizenshipValue) != null)
+			anonymousProfileDTO.setCitizenship(getLanguageBasedValueForSimpleType(fieldMap.get(citizenshipValue), language));
+
 		// set email and phone
 		String emailValue = JsonUtil.getJSONValue(
 				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
@@ -306,7 +313,6 @@ public class AnonymousProfileServiceImpl implements AnonymousProfileService {
 				exceptions.add(exceptionsDTO);
 			} else {
 				BiometricInfoDTO biometricInfoDTO = new BiometricInfoDTO();
-				biometricInfoDTO.setType(bir.getBdbInfo().getType().get(0).name());
 				if (!bir.getBdbInfo().getSubtype().isEmpty()) {
 					biometricInfoDTO.setSubType(String.join(" ", bir.getBdbInfo().getSubtype()));
 				}
