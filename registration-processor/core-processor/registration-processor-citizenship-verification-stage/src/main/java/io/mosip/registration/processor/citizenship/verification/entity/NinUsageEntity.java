@@ -20,7 +20,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "consumed_introducer_nin", schema = "regprc")
+@Table(name = "consumed_nin_introducer", schema = "regprc")
 public class NinUsageEntity implements Serializable {
 
 	/**

@@ -373,7 +373,22 @@ public enum StatusUtil {
 	VERIFICATION_SUCCESS(StatusConstants.VERIFICATION_STAGE + "001", "Verification success"),
 	VERIFICATION_FAILED(StatusConstants.VERIFICATION_STAGE + "002", "Verification failed"),
 	VERIFICATION_SENT(StatusConstants.VERIFICATION_STAGE + "003", "Sent for verification"),
-	VERIFICATION_RESEND(StatusConstants.VERIFICATION_STAGE + "004", "Resend for verification");
+	VERIFICATION_RESEND(StatusConstants.VERIFICATION_STAGE + "004", "Resend for verification"),
+	
+	// Payment validator stage
+	PAYMENT_VALIDATION_SUCCESS(StatusConstants.PAYMENT_VALIDATOR_STAGE + "001", "Payment Validation success"),
+	PAYMENT_VALIDATION_FAILED(StatusConstants.PAYMENT_VALIDATOR_STAGE + "002", "Payment Validation failed"),
+	PAYMENT_VALIDATION_SENT(StatusConstants.PAYMENT_VALIDATOR_STAGE + "003", "Sent for payment validation"),
+	PAYMENT_VALIDATION_RESEND(StatusConstants.PAYMENT_VALIDATOR_STAGE + "004", "Resend for payment validation"),
+	
+	// Citizenship Verification stage
+	CITIZENSHIP_VERIFICATION_SUCCESS(StatusConstants.CITIZENSHIP_VERIFICATION + "001", "Citizenship Verification success"),
+	CITIZENSHIP_VERIFICATION_FAILED(StatusConstants.CITIZENSHIP_VERIFICATION + "002", "Citizenship Verification failed"),
+	CITIZENSHIP_VERIFICATION_SENT(StatusConstants.CITIZENSHIP_VERIFICATION + "003", " Sent for Citizenship Verification"),
+	CITIZENSHIP_VERIFICATION_RESEND(StatusConstants.CITIZENSHIP_VERIFICATION + "004", "Resend for Citizenship Verification"),
+	;
+	
+	
 
 	private final String statusComment;
 	private final String statusCode;

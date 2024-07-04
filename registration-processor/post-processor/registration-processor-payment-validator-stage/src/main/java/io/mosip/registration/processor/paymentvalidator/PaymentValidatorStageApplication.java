@@ -12,7 +12,8 @@ public class PaymentValidatorStageApplication {
 				"io.mosip.registration.processor.core.kernel.beans",
 				"io.mosip.registration.processor.status.config",
 				"io.mosip.registration.processor.packet.storage.config",
-				"io.mosip.registration.processor.paymentvalidator.util");
+				"io.mosip.registration.processor.paymentvalidator.util",
+				"io.mosip.registration.processor.paymentvalidator.config");
 		ctx.refresh();
 
 		PaymentValidatorStage paymentStage = ctx.getBean(PaymentValidatorStage.class);

@@ -1,5 +1,6 @@
 package io.mosip.registration.processor.paymentvalidator.util;
 
+import java.io.Console;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Iterator;
@@ -27,6 +28,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.client.OAuth2RestOperations;
+import org.springframework.security.oauth2.client.OAuth2RestTemplate;
 import org.springframework.security.oauth2.common.OAuth2AccessToken;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -70,17 +73,9 @@ public class CustomizedRestApiClient {
 	@Autowired
 	RestTemplateBuilder builder;
 	
-	@Value("${security.oauth2.client.client-id}")
-	private String gatewayClientId;
-	
-	@Value("${security.oauth2.client.access-token-uri}")
-	private String gatewayTokenUrl;
-	
-	@Value("${security.oauth2.client.client-secret}")
-	private String gatewayClientSecret;
-	
-	@Value("${security.oauth2.client.grant-type}")
-	private String gatewayGrantType;
+	@SuppressWarnings("deprecation")
+	@Autowired
+    private OAuth2RestOperations oauthTemplate;
 
 	@Autowired
 	Environment environment;
@@ -235,14 +230,10 @@ public class CustomizedRestApiClient {
 	 * @return
 	 * @throws IOException
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "deprecation" })
 	private HttpEntity<Object> setRequestHeader(Object requestType, MediaType mediaType) throws IOException {
 		MultiValueMap<String, String> headers = new LinkedMultiValueMap<String, String>();
-		//headers.add("", getToken());
-		
-		/* include token handlers for new token from nira-payment-realm*/
-		//headers.add("Authorization", "Basic YWRtaW46YWRtaW4=");
-		headers.add("Authorization", getAccessToken());
+		headers.add("Authorization", "Bearer " + oauthTemplate.getAccessToken().getValue());
 		headers.add(TracingConstant.TRACE_HEADER, (String) ContextualData.getOrDefault(TracingConstant.TRACE_ID_KEY));
 		if (mediaType != null) {
 			headers.add("Content-Type", mediaType.toString());
@@ -317,7 +308,7 @@ public class CustomizedRestApiClient {
 				throw e;
 			}
 		}
-		return AUTHORIZATION + token;
+		return token;
 	}
 
 	private SecretKeyRequest setSecretKeyRequestDTO() {
@@ -326,8 +317,8 @@ public class CustomizedRestApiClient {
 		request.setClientId(environment.getProperty("token.request.clientId"));
 		request.setSecretKey(environment.getProperty("token.request.secretKey"));
 		return request;
-	}
-	*/
+	}*/
+
 	
 	public void tokenExceptionHandler(Exception e) {
 		if (e instanceof HttpStatusCodeException) {
@@ -339,40 +330,5 @@ public class CustomizedRestApiClient {
 			}
 		}
 	}
-	
-	
-	
-	
-	public String getAccessToken() {
-        /*String keycloakTokenUrl = "http://localhost:8180/realms/payment-gateway/protocol/openid-connect/token";
-        String clientId = "nira-payment-gateway";
-        String clientSecret = "qMzGHjLvdHrBdzX1RxrGgm6kGebEaJSq";
-        String grantType = "client_credentials";*/
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.set(gatewayClientId, gatewayClientSecret);
-
-
-        String requestBody = "grant_type=" + gatewayGrantType;
-
-        HttpEntity<String> request = new HttpEntity<>(requestBody, headers);
-
-        @SuppressWarnings("deprecation")
-		ResponseEntity<OAuth2AccessToken> response = localRestTemplate.postForEntity(gatewayTokenUrl, request, OAuth2AccessToken.class);
-
-        if (response.getStatusCode().is2xxSuccessful()) {
-            OAuth2AccessToken accessToken = response.getBody();
-            if (accessToken != null) {
-                return  AUTHORIZATION + accessToken.getValue();
-            } else {
-                // Handle case where token response body is null
-                return null;
-            }
-        } else {
-            // Handle error response from token endpoint
-            return null;
-        }
-    }
 
 }
