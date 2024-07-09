@@ -940,5 +940,51 @@ public class Utilities {
 		}
 		return null;
 	}
+	
+	public String retrieveIdrepoJsonStatusForNIN(String nin) throws ApisResourceAccessException, IdRepoAppException {
+		String response = null;
+		if (nin != null) {
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+					"Utilities::retrieveIdrepoJson()::entry");
+			List<String> pathSegments = new ArrayList<>();
+			pathSegments.add(nin.toLowerCase() + "@nin");
+			IdResponseDTO1 idResponseDto;
+			
+			String typeParam = "type";
+			String typeParamValue = "all"; 
+			String typeIdParam = "idType";
+			String typeIdParamValue = "handle";
+			
+			List<String> queryParams = new ArrayList<>();
+			queryParams.add(typeParam);
+			queryParams.add(typeIdParam);
+			
+			List<Object> queryParamValues = new ArrayList<Object>();
+			queryParamValues.add(typeParamValue);
+			queryParamValues.add(typeIdParamValue);
+			
+
+			idResponseDto = (IdResponseDTO1) restClientService.getApi(ApiName.IDREPOGETIDBYUIN, pathSegments, queryParams, queryParamValues,
+					IdResponseDTO1.class);
+			if (idResponseDto == null) {
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+						"Utilities::retrieveIdrepoJson()::exit idResponseDto is null");
+				return null;
+			}
+			if (!idResponseDto.getErrors().isEmpty()) {
+				List<ErrorDTO> error = idResponseDto.getErrors();
+				regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+						"Utilities::retrieveIdrepoJson():: error with error message " + error.get(0).getMessage());
+				throw new IdRepoAppException(error.get(0).getMessage());
+			}
+
+			response = idResponseDto.getResponse().getStatus();
+
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+					"Utilities::retrieveIdrepoJson():: IDREPOGETIDBYUIN GET service call ended Successfully");
+		}
+
+		return response;
+	}
 
 }
