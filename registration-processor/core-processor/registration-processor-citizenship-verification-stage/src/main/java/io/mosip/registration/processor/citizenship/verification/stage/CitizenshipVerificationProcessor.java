@@ -286,13 +286,13 @@ public class CitizenshipVerificationProcessor {
 			}
 		} catch (ApisResourceAccessException | PacketManagerException | JsonProcessingException | IOException e) {
 			InternalRegistrationStatusDto registrationStatusDto = registrationStatusService.getRegistrationStatus(
-		            registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
-		        LogDescription description = new LogDescription();
-		        
-		        updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED,
-		                StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description,
-		                PlatformErrorMessages.PACKET_MANAGER_EXCEPTION, e);
-		        
+					registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
+			LogDescription description = new LogDescription();
+
+			updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED,
+					StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description,
+					PlatformErrorMessages.PACKET_MANAGER_EXCEPTION, e);
+
 			object.setIsValid(Boolean.FALSE);
 			object.setInternalError(Boolean.TRUE);
 			regProcLogger.error("In Registration Processor", "Citizenship Verification",
@@ -356,7 +356,6 @@ public class CitizenshipVerificationProcessor {
 
 			JSONObject parentInfoJson = utility.retrieveIdrepoJsonWithNIN(parentNin);
 			regProcLogger.info("parentInfoJson {}: " + parentInfoJson);
-			
 
 			if (parentInfoJson == null) {
 				regProcLogger.error(parentType + "'s NIN not found in repo data.");
@@ -638,7 +637,10 @@ public class CitizenshipVerificationProcessor {
 
 	private boolean checkApplicantAgeWithParentOrGuardian(LocalDate applicantDob, LocalDate parentOrGuardianDob,
 			int ageCondition) {
-		return (Period.between(parentOrGuardianDob, applicantDob).getYears() >= ageCondition);
+		Period ageDifference = Period.between(applicantDob, parentOrGuardianDob);
+		regProcLogger.info("Age difference is: {} years, {} months, and {} days.", ageDifference.getYears(),
+				ageDifference.getMonths(), ageDifference.getDays());
+		return ageDifference.getYears() >= ageCondition;
 	}
 
 	private boolean handleValidationWithNoParentNinFound(Map<String, String> applicantFields) {
@@ -718,8 +720,8 @@ public class CitizenshipVerificationProcessor {
 			regProcLogger.info("GUARDIAN_NIN: " + guardianNin);
 		}
 
-		String livingStatus = applicantFields.get(MappingJsonConstants.GUARDIAN_LIVING_STATUS); 
-																								
+		String livingStatus = applicantFields.get(MappingJsonConstants.GUARDIAN_LIVING_STATUS);
+
 		String status = utility.retrieveIdrepoJsonStatusForNIN(guardianNin);
 
 		String guardianRelationToApplicantJson = applicantFields
