@@ -195,7 +195,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 			/* Will change to NIN in new env version */
 			regProcLogger.info("In Registration Processor - Payment Validator - Extracting NIN from packet");
-			String uin = utilities.getPacketManagerService().getField(regId, "UIN", object.getReg_type(),
+			String nin = utilities.getPacketManagerService().getField(regId, "NIN", object.getReg_type(),
 					ProviderStageName.PAYMENT_VALIDATOR);
 
 			if (regType.equalsIgnoreCase(RegType.LOST_USECASE) || regType.equalsIgnoreCase(RegType.UPDATE_USECASE)) {
@@ -206,7 +206,9 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 					if (dataResponse != null) {
 						try {
 							/* will change to allow handles method using NIN */
-							JSONObject uinJson = utilities.retrieveIdrepoJson(uin);
+							//JSONObject uinJson = utilities.retrieveIdrepoJson(uin);
+							JSONObject uinJson = utilities.retrieveIdrepoJsonWithNIN(nin);
+							//regProcLogger.info("Retreived NIN idrepo {}: " + uinJson.toString());
 						
 							if (Objects.isNull(uinJson)) {
 
