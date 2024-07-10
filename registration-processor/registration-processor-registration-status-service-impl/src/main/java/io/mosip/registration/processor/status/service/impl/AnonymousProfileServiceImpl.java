@@ -125,6 +125,7 @@ public class AnonymousProfileServiceImpl implements AnonymousProfileService {
 		anonymousProfileDTO.setProcessName(
 				getFieldValueFromMetaInfo(metaInfoMap, JsonConstant.METADATA, JsonConstant.REGISTRATIONTYPE));
 		anonymousProfileDTO.setProcessStage(processStage);
+		anonymousProfileDTO.setCitizenship("some citizenship");
 		anonymousProfileDTO.setStatus(statusCode);
 		anonymousProfileDTO.setDate(DateUtils.getUTCCurrentDateTimeString());
 		anonymousProfileDTO.setStartDateTime(DateUtils.getUTCCurrentDateTimeString());
@@ -169,10 +170,23 @@ public class AnonymousProfileServiceImpl implements AnonymousProfileService {
 
 		// set citizenshipType
 		String citizenshipValue = JsonUtil.getJSONValue(
-				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.APPLICANT_CITIZENSHIPTYPE),
-				MappingJsonConstants.VALUE);
+				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.APPLICANT_CITIZENSHIPTYPE), MappingJsonConstants.VALUE);
 		if (fieldMap.get(citizenshipValue) != null)
 			anonymousProfileDTO.setCitizenship(getLanguageBasedValueForSimpleType(fieldMap.get(citizenshipValue), language));
+
+
+		// set disability
+		String disabilityValue = JsonUtil.getJSONValue(
+				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.DISABILITY), MappingJsonConstants.VALUE);
+		if (fieldMap.get(disabilityValue) != null)
+			anonymousProfileDTO.setDisability(getLanguageBasedValueForSimpleType(fieldMap.get(disabilityValue), language));
+
+// set tribe
+		String tribeValue = JsonUtil.getJSONValue(
+				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.GUARDIAN_TRIBE), MappingJsonConstants.VALUE);
+		if (fieldMap.get(tribeValue) != null)
+			anonymousProfileDTO.setTribe(getLanguageBasedValueForSimpleType(fieldMap.get(tribeValue), language));
+
 
 		// set email and phone
 		String emailValue = JsonUtil.getJSONValue(

@@ -26,5 +26,6 @@ public class AnonymousProfileDTO {
 	private String enrollmentCenterId;
 	private String status;
 	private String citizenship;
-
+	private String disability;
+	private String tribe;
 }

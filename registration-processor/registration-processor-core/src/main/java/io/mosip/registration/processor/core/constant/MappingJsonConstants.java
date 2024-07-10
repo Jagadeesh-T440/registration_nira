@@ -67,6 +67,7 @@ public static final String GUARDIAN_NIN = "guardianNIN_AIN";
 public static final String GUARDIAN_RELATION_TO_APPLICANT = "guardianRelationToApplicant";
 public static final String GUARDIAN_CLAN = "applicantPlaceOfOriginClan";
 public static final String GUARDIAN_TRIBE = "applicantPlaceOfOriginIndigenousCommunityTribe";
+
 public static final String GUARDIAN_PLACE_OF_ORIGIN = "applicantplaceoforigin";
 public static final String APPLICANT_DATEOFBIRTH = "dateOfBirth";
 public static final String APPLICANT_CITIZENSHIPTYPE = "applicantCitizenshipType";
@@ -83,11 +84,5 @@ public static final String GUARDIAN_CLAN_FORM = "guardianClan";
 public static final String GUARDIAN_LIVING_STATUS = "guardianlivingstatus";
 public static final String DATE_FORMAT = "yyyy/MM/dd";
 public static final String NIN_STATUS = "status";
-
-
-	
-
-
-
-
+public static final String DISABILITY = "disabilities";
 }
