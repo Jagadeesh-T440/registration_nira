@@ -23,6 +23,11 @@ import io.mosip.registration.processor.core.abstractverticle.MessageDTO;
 import io.mosip.registration.processor.core.abstractverticle.MosipEventBus;
 import io.mosip.registration.processor.core.abstractverticle.MosipRouter;
 import io.mosip.registration.processor.core.abstractverticle.MosipVerticleAPIManager;
+import io.mosip.registration.processor.core.code.EventId;
+import io.mosip.registration.processor.core.code.EventName;
+import io.mosip.registration.processor.core.code.EventType;
+import io.mosip.registration.processor.core.code.ModuleName;
+import io.mosip.registration.processor.core.code.RegistrationExceptionTypeCode;
 import io.mosip.registration.processor.core.code.RegistrationTransactionStatusCode;
 import io.mosip.registration.processor.core.code.RegistrationTransactionTypeCode;
 import io.mosip.registration.processor.core.constant.LoggerFileConstant;
@@ -35,6 +40,7 @@ import io.mosip.registration.processor.core.logger.LogDescription;
 import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 import io.mosip.registration.processor.core.status.util.StatusUtil;
 import io.mosip.registration.processor.core.status.util.TrimExceptionMessage;
+import io.mosip.registration.processor.core.util.RegistrationExceptionMapperUtil;
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.paymentvalidator.constants.PrnStatusCode;
 import io.mosip.registration.processor.paymentvalidator.constants.RegType;
@@ -45,6 +51,8 @@ import io.mosip.registration.processor.paymentvalidator.dto.PrnStatusResponseDTO
 import io.mosip.registration.processor.paymentvalidator.dto.PrnStatusResponseDataDTO;
 import io.mosip.registration.processor.paymentvalidator.dto.PrnStatusRequestDTO;
 import io.mosip.registration.processor.paymentvalidator.util.CustomizedRestApiClient;
+import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequestBuilder;
+import io.mosip.registration.processor.status.code.RegistrationStatusCode;
 import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
 import io.mosip.registration.processor.status.dto.RegistrationStatusDto;
 import io.mosip.registration.processor.status.service.RegistrationStatusService;
@@ -120,6 +128,40 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 	/** The registration status service. */
 	@Autowired
 	RegistrationStatusService<String, InternalRegistrationStatusDto, RegistrationStatusDto> registrationStatusService;
+	
+	@Value("${taxhead.replace.code}")
+	private String taxheadReplaceCode;
+	
+	@Value("${taxhead.replace.amount}")
+	private String taxheadReplaceAmount;
+	
+	@Value("${taxhead.change.code}")
+	private String taxheadChangeCode;
+	
+	@Value("${taxhead.change.amount}")
+	private String taxheadChangeAmount;
+	
+	@Value("${taxhead.correction_errors.code}")
+	private String taxheadCorrectionsCode;
+	
+	@Value("${taxhead.correction_errors.amount}")
+	private String taxheadCorrectionsAmount;
+	
+	@Value("${taxhead.replace_defaced.code}")
+	private String taxheadDefacedCode;
+	
+	@Value("${taxhead.replace_defaced.amount}")
+	private String taxheadDefacedAmount;
+	
+	private static final String USER = "MOSIP_SYSTEM";
+	
+	@Autowired
+	private AuditLogRequestBuilder auditLogRequestBuilder;
+	
+	private TrimExceptionMessage trimExpMessage = new TrimExceptionMessage();
+	
+	@Autowired
+	RegistrationExceptionMapperUtil registrationStatusMapperUtil;
 
 	@SuppressWarnings("null")
 	@Override
@@ -153,7 +195,7 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 
 			/* Will change to NIN in new env version */
 			regProcLogger.info("In Registration Processor - Payment Validator - Extracting NIN from packet");
-			String uin = utilities.getPacketManagerService().getField(regId, "UIN", object.getReg_type(),
+			String nin = utilities.getPacketManagerService().getField(regId, "NIN", object.getReg_type(),
 					ProviderStageName.PAYMENT_VALIDATOR);
 
 			if (regType.equalsIgnoreCase(RegType.LOST_USECASE) || regType.equalsIgnoreCase(RegType.UPDATE_USECASE)) {
@@ -164,7 +206,9 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 					if (dataResponse != null) {
 						try {
 							/* will change to allow handles method using NIN */
-							JSONObject uinJson = utilities.retrieveIdrepoJson(uin);
+							//JSONObject uinJson = utilities.retrieveIdrepoJson(uin);
+							JSONObject uinJson = utilities.retrieveIdrepoJsonWithNIN(nin);
+							//regProcLogger.info("Retreived NIN idrepo {}: " + uinJson.toString());
 						
 							if (Objects.isNull(uinJson)) {
 
@@ -416,21 +460,54 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 						.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.PAYMENT_VALIDATION.toString());
 			}
 		} catch (Exception e) {
-			object.setIsValid(Boolean.FALSE);			
-			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
-					regId, PlatformErrorMessages.RPR_PYVS_GATEWAY_SERVICE_ACCESS_FAILED + e.getMessage()
-							+ ExceptionUtils.getStackTrace(e));
-			registrationStatusDto
-					.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.REPROCESS.toString());
-			registrationStatusDto.setStatusComment(trimeExpMessage.trimExceptionMessage(
-					StatusUtil.API_RESOUCE_ACCESS_FAILED.getMessage() + SEPERATOR + e.getMessage()));
-			registrationStatusDto.setSubStatusCode(StatusUtil.API_RESOUCE_ACCESS_FAILED.getCode());
-			description.setMessage(PlatformErrorMessages.RPR_PYVS_PRN_STATUS_REQUEST_FAILED.getMessage());
-			description.setCode(PlatformErrorMessages.RPR_PYVS_PRN_STATUS_REQUEST_FAILED.getCode());
+			object.setIsValid(Boolean.FALSE);
 			object.setInternalError(Boolean.TRUE);
-		}
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+					regId, PlatformErrorMessages.RPR_PYVS_FAILED + e.getMessage()
+							+ ExceptionUtils.getStackTrace(e));
+			updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED, StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description, PlatformErrorMessages.RPR_PYVS_FAILED, e);
+			
+		} finally {
+	        if (object.getInternalError()) {
+	            int retryCount = registrationStatusDto.getRetryCount() != null ? registrationStatusDto.getRetryCount() + 1 : 1;
+	            registrationStatusDto.setRetryCount(retryCount);
+	            updateErrorFlags(registrationStatusDto, object);
+	        }
+	        registrationStatusDto.setUpdatedBy(USER);
+	        String moduleId = description.getCode();
+	        String moduleName = ModuleName.PAYMENT_VALIDATOR.toString();
+	        registrationStatusService.updateRegistrationStatus(registrationStatusDto, moduleId, moduleName);
+	        updateAudit(description, isTransactionSuccessful, moduleId, moduleName, regId);
+	    }	
 
 		return object;
+	}
+	
+	private void updateAudit(LogDescription description, boolean isTransactionSuccessful, String moduleId, String moduleName, String registrationId) {
+	    String eventId = isTransactionSuccessful ? EventId.RPR_402.toString() : EventId.RPR_405.toString();
+	    String eventName = isTransactionSuccessful ? EventName.UPDATE.toString() : EventName.EXCEPTION.toString();
+	    String eventType = isTransactionSuccessful ? EventType.BUSINESS.toString() : EventType.SYSTEM.toString();
+
+	    auditLogRequestBuilder.createAuditRequestBuilder(description.getMessage(), eventId, eventName, eventType, moduleId, moduleName, registrationId);
+	}
+
+	private void updateErrorFlags(InternalRegistrationStatusDto registrationStatusDto, MessageDTO object) {
+	    object.setInternalError(true);
+	    if (registrationStatusDto.getLatestTransactionStatusCode().equalsIgnoreCase(RegistrationTransactionStatusCode.REPROCESS.toString())) {
+	        object.setIsValid(true);
+	    } else {
+	        object.setIsValid(false);
+	    }
+	}
+
+	private void updateDTOsAndLogError(InternalRegistrationStatusDto registrationStatusDto, RegistrationStatusCode registrationStatusCode, StatusUtil statusUtil, RegistrationExceptionTypeCode registrationExceptionTypeCode, LogDescription description, PlatformErrorMessages platformErrorMessages, Exception e) {
+	    registrationStatusDto.setStatusCode(registrationStatusCode.toString());
+	    registrationStatusDto.setStatusComment(trimExpMessage.trimExceptionMessage(statusUtil.getMessage() + e.getMessage()));
+	    registrationStatusDto.setSubStatusCode(statusUtil.getCode());
+	    registrationStatusDto.setLatestTransactionStatusCode(registrationStatusMapperUtil.getStatusCode(registrationExceptionTypeCode));
+	    description.setMessage(platformErrorMessages.getMessage());
+	    description.setCode(platformErrorMessages.getCode());
+	    regProcLogger.error("Error in process for registration id {} {} {} {} {}", registrationStatusDto.getRegistrationId(), description.getCode(), platformErrorMessages.getMessage(), e.getMessage(), ExceptionUtils.getStackTrace(e));
 	}
 
 	@Override
@@ -562,23 +639,23 @@ public class PaymentValidatorStage extends MosipVerticleAPIManager {
 	private boolean validateTaxHeadAndRegType(PrnStatusResponseDataDTO response, String regType) {
 		
 		if(regType.equalsIgnoreCase(response.getProcessFlow())) {
-			if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_CHANGE.getTaxHeadCode())){
-				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_CHANGE.getAmountPaid())) {
+			if(response.getTaxHeadCode().equalsIgnoreCase(taxheadChangeCode)){
+				if(response.getAmountPaid().equals(taxheadChangeAmount)) {
 					return true;
 				}
 			}
-			else if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_CORRECTION_ERRORS.getTaxHeadCode())){
-				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_CORRECTION_ERRORS.getAmountPaid())) {
+			else if(response.getTaxHeadCode().equalsIgnoreCase(taxheadCorrectionsCode)){
+				if(response.getAmountPaid().equals(taxheadCorrectionsAmount)) {
 					return true;
 				}
 			}
-			else if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_REPLACE.getTaxHeadCode())){
-				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_REPLACE.getAmountPaid())) {
+			else if(response.getTaxHeadCode().equalsIgnoreCase(taxheadReplaceCode)){
+				if(response.getAmountPaid().equals(taxheadReplaceAmount)) {
 					return true;
 				}
 			}
-			else if(response.getTaxHeadCode().equalsIgnoreCase(TaxHeadCode.TAX_HEAD_REPLACE_DEFACED.getTaxHeadCode())){
-				if(response.getAmountPaid().equals(TaxHeadCode.TAX_HEAD_REPLACE_DEFACED.getAmountPaid())) {
+			else if(response.getTaxHeadCode().equalsIgnoreCase(taxheadDefacedCode)){
+				if(response.getAmountPaid().equals(taxheadDefacedAmount)) {
 					return true;
 				}
 			}

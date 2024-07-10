@@ -71,11 +71,11 @@ import org.json.simple.JSONObject;
 public class CitizenshipVerificationProcessor {
 
 	private static final String USER = "MOSIP_SYSTEM";
-	
+
 	private TrimExceptionMessage trimExpMessage = new TrimExceptionMessage();
 
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(CitizenshipVerificationProcessor.class);
-	
+
 	@Autowired
 	private AuditLogRequestBuilder auditLogRequestBuilder;
 
@@ -106,100 +106,118 @@ public class CitizenshipVerificationProcessor {
 	private String dateformat;
 
 	public MessageDTO process(MessageDTO object) {
-		
+
 		LogDescription description = new LogDescription();
-	    boolean isTransactionSuccessful = false;
-	    String registrationId = object.getRid();
+		boolean isTransactionSuccessful = false;
+		String registrationId = object.getRid();
 
 		object.setMessageBusAddress(MessageBusAddress.CITIZENSHIP_VERIFICATION_BUS_IN);
 		object.setIsValid(Boolean.FALSE);
 		object.setInternalError(Boolean.FALSE);
-		
+
 		regProcLogger.debug("Process called for registrationId {}", registrationId);
-		
-		 InternalRegistrationStatusDto registrationStatusDto = registrationStatusService
-		            .getRegistrationStatus(registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
 
-		    registrationStatusDto.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.CITIZENSHIP_VERIFICATION.toString());
-		    registrationStatusDto.setRegistrationStageName(ProviderStageName.CITIZENSHIP_VERIFICATION.toString());
+		InternalRegistrationStatusDto registrationStatusDto = registrationStatusService.getRegistrationStatus(
+				registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
 
-		
+		registrationStatusDto
+				.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.CITIZENSHIP_VERIFICATION.toString());
+		registrationStatusDto.setRegistrationStageName(ProviderStageName.CITIZENSHIP_VERIFICATION.toString());
 
 		try {
 			if (validatePacketCitizenship(registrationId, object)) {
 				object.setIsValid(Boolean.TRUE);
 				object.setInternalError(Boolean.FALSE);
 				regProcLogger.info("Citizenship Verification passed for registrationId: {}", registrationId);
-	            registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
-	            registrationStatusDto.setStatusComment(StatusUtil.CITIZENSHIP_VERIFICATION_SUCCESS.getMessage());
-	            registrationStatusDto.setSubStatusCode(StatusUtil.CITIZENSHIP_VERIFICATION_SUCCESS.getCode());
-	            registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
+				registrationStatusDto
+						.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
+				registrationStatusDto.setStatusComment(StatusUtil.CITIZENSHIP_VERIFICATION_SUCCESS.getMessage());
+				registrationStatusDto.setSubStatusCode(StatusUtil.CITIZENSHIP_VERIFICATION_SUCCESS.getCode());
+				registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
 
-	            description.setMessage(PlatformSuccessMessages.RPR_CITIZENSHIP_VERIFICATION_SUCCESS.getMessage() + " -- " + registrationId);
-	            description.setCode(PlatformSuccessMessages.RPR_CITIZENSHIP_VERIFICATION_SUCCESS.getCode());
-	            isTransactionSuccessful = true;
+				description.setMessage(PlatformSuccessMessages.RPR_CITIZENSHIP_VERIFICATION_SUCCESS.getMessage()
+						+ " -- " + registrationId);
+				description.setCode(PlatformSuccessMessages.RPR_CITIZENSHIP_VERIFICATION_SUCCESS.getCode());
+				isTransactionSuccessful = true;
 			} else {
 				object.setIsValid(Boolean.FALSE);
 				object.setInternalError(Boolean.FALSE);
-				regProcLogger.info("Citizenship Verification failed for registrationId: {}. Packet goes to manual verification stage.", registrationId);
-	            registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
-	            registrationStatusDto.setStatusComment(StatusUtil.CITIZENSHIP_VERIFICATION_FAILED.getMessage());
-	            registrationStatusDto.setSubStatusCode(StatusUtil.CITIZENSHIP_VERIFICATION_FAILED.getCode());
-	            registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
-	            
-	            description.setMessage(PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED.getMessage() + " -- " + registrationId);
-	            description.setCode(PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED.getCode());
+				regProcLogger.info(
+						"Citizenship Verification failed for registrationId: {}. Packet goes to manual verification stage.",
+						registrationId);
+				registrationStatusDto
+						.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
+				registrationStatusDto.setStatusComment(StatusUtil.CITIZENSHIP_VERIFICATION_FAILED.getMessage());
+				registrationStatusDto.setSubStatusCode(StatusUtil.CITIZENSHIP_VERIFICATION_FAILED.getCode());
+				registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
+
+				description.setMessage(PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED.getMessage() + " -- "
+						+ registrationId);
+				description.setCode(PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED.getCode());
 			}
 
 		} catch (Exception e) {
-			updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED, StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description, PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED, e);
+			updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED,
+					StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description,
+					PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED, e);
 			object.setIsValid(Boolean.FALSE);
 			object.setInternalError(Boolean.TRUE);
 			regProcLogger.error("In Registration Processor", "Citizenship Verification",
-					"Failed to validate citizenship for packet: " + e.getMessage());	
+					"Failed to validate citizenship for packet: " + e.getMessage());
 		} finally {
-	        if (object.getInternalError()) {
-	            int retryCount = registrationStatusDto.getRetryCount() != null ? registrationStatusDto.getRetryCount() + 1 : 1;
-	            registrationStatusDto.setRetryCount(retryCount);
-	            updateErrorFlags(registrationStatusDto, object);
-	        }
-	        registrationStatusDto.setUpdatedBy(USER);
-	        String moduleId = description.getCode();
-	        String moduleName = ModuleName.CITIZENSHIP_VERIFICATION.toString();
-	        registrationStatusService.updateRegistrationStatus(registrationStatusDto, moduleId, moduleName);
-	        updateAudit(description, isTransactionSuccessful, moduleId, moduleName, registrationId);
-	    }	
+			if (object.getInternalError()) {
+				int retryCount = registrationStatusDto.getRetryCount() != null
+						? registrationStatusDto.getRetryCount() + 1
+						: 1;
+				registrationStatusDto.setRetryCount(retryCount);
+				updateErrorFlags(registrationStatusDto, object);
+			}
+			registrationStatusDto.setUpdatedBy(USER);
+			String moduleId = description.getCode();
+			String moduleName = ModuleName.CITIZENSHIP_VERIFICATION.toString();
+			registrationStatusService.updateRegistrationStatus(registrationStatusDto, moduleId, moduleName);
+			updateAudit(description, isTransactionSuccessful, moduleId, moduleName, registrationId);
+		}
 
-		
 		return object;
 
 	}
 
-	private void updateAudit(LogDescription description, boolean isTransactionSuccessful, String moduleId, String moduleName, String registrationId) {
-	    String eventId = isTransactionSuccessful ? EventId.RPR_402.toString() : EventId.RPR_405.toString();
-	    String eventName = isTransactionSuccessful ? EventName.UPDATE.toString() : EventName.EXCEPTION.toString();
-	    String eventType = isTransactionSuccessful ? EventType.BUSINESS.toString() : EventType.SYSTEM.toString();
+	private void updateAudit(LogDescription description, boolean isTransactionSuccessful, String moduleId,
+			String moduleName, String registrationId) {
+		String eventId = isTransactionSuccessful ? EventId.RPR_402.toString() : EventId.RPR_405.toString();
+		String eventName = isTransactionSuccessful ? EventName.UPDATE.toString() : EventName.EXCEPTION.toString();
+		String eventType = isTransactionSuccessful ? EventType.BUSINESS.toString() : EventType.SYSTEM.toString();
 
-	    auditLogRequestBuilder.createAuditRequestBuilder(description.getMessage(), eventId, eventName, eventType, moduleId, moduleName, registrationId);
+		auditLogRequestBuilder.createAuditRequestBuilder(description.getMessage(), eventId, eventName, eventType,
+				moduleId, moduleName, registrationId);
 	}
 
 	private void updateErrorFlags(InternalRegistrationStatusDto registrationStatusDto, MessageDTO object) {
-	    object.setInternalError(true);
-	    if (registrationStatusDto.getLatestTransactionStatusCode().equalsIgnoreCase(RegistrationTransactionStatusCode.REPROCESS.toString())) {
-	        object.setIsValid(true);
-	    } else {
-	        object.setIsValid(false);
-	    }
+		object.setInternalError(true);
+		if (registrationStatusDto.getLatestTransactionStatusCode()
+				.equalsIgnoreCase(RegistrationTransactionStatusCode.REPROCESS.toString())) {
+			object.setIsValid(true);
+		} else {
+			object.setIsValid(false);
+		}
 	}
 
-	private void updateDTOsAndLogError(InternalRegistrationStatusDto registrationStatusDto, RegistrationStatusCode registrationStatusCode, StatusUtil statusUtil, RegistrationExceptionTypeCode registrationExceptionTypeCode, LogDescription description, PlatformErrorMessages platformErrorMessages, Exception e) {
-	    registrationStatusDto.setStatusCode(registrationStatusCode.toString());
-	    registrationStatusDto.setStatusComment(trimExpMessage.trimExceptionMessage(statusUtil.getMessage() + e.getMessage()));
-	    registrationStatusDto.setSubStatusCode(statusUtil.getCode());
-	    registrationStatusDto.setLatestTransactionStatusCode(registrationStatusMapperUtil.getStatusCode(registrationExceptionTypeCode));
-	    description.setMessage(platformErrorMessages.getMessage());
-	    description.setCode(platformErrorMessages.getCode());
-	    regProcLogger.error("Error in process for registration id {} {} {} {} {}", registrationStatusDto.getRegistrationId(), description.getCode(), platformErrorMessages.getMessage(), e.getMessage(), ExceptionUtils.getStackTrace(e));
+	private void updateDTOsAndLogError(InternalRegistrationStatusDto registrationStatusDto,
+			RegistrationStatusCode registrationStatusCode, StatusUtil statusUtil,
+			RegistrationExceptionTypeCode registrationExceptionTypeCode, LogDescription description,
+			PlatformErrorMessages platformErrorMessages, Exception e) {
+		registrationStatusDto.setStatusCode(registrationStatusCode.toString());
+		registrationStatusDto
+				.setStatusComment(trimExpMessage.trimExceptionMessage(statusUtil.getMessage() + e.getMessage()));
+		registrationStatusDto.setSubStatusCode(statusUtil.getCode());
+		registrationStatusDto.setLatestTransactionStatusCode(
+				registrationStatusMapperUtil.getStatusCode(registrationExceptionTypeCode));
+		description.setMessage(platformErrorMessages.getMessage());
+		description.setCode(platformErrorMessages.getCode());
+		regProcLogger.error("Error in process for registration id {} {} {} {} {}",
+				registrationStatusDto.getRegistrationId(), description.getCode(), platformErrorMessages.getMessage(),
+				e.getMessage(), ExceptionUtils.getStackTrace(e));
 	}
 
 	private boolean validatePacketCitizenship(String registrationId, MessageDTO object) {
@@ -267,6 +285,14 @@ public class CitizenshipVerificationProcessor {
 				}
 			}
 		} catch (ApisResourceAccessException | PacketManagerException | JsonProcessingException | IOException e) {
+			InternalRegistrationStatusDto registrationStatusDto = registrationStatusService.getRegistrationStatus(
+					registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
+			LogDescription description = new LogDescription();
+
+			updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED,
+					StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description,
+					PlatformErrorMessages.PACKET_MANAGER_EXCEPTION, e);
+
 			object.setIsValid(Boolean.FALSE);
 			object.setInternalError(Boolean.TRUE);
 			regProcLogger.error("In Registration Processor", "Citizenship Verification",
@@ -291,6 +317,7 @@ public class CitizenshipVerificationProcessor {
 		String fatherNIN = applicantFields.get(MappingJsonConstants.FATHER_NIN);
 		regProcLogger.info("Father's NIN: " + fatherNIN);
 		String motherNIN = applicantFields.get(MappingJsonConstants.MOTHER_NIN);
+		regProcLogger.info("Mother's NIN: " + motherNIN);
 
 		LocalDate applicantDob = parseDate(applicantFields.get(MappingJsonConstants.APPLICANT_DATEOFBIRTH), formatter);
 		regProcLogger.info(
@@ -610,7 +637,10 @@ public class CitizenshipVerificationProcessor {
 
 	private boolean checkApplicantAgeWithParentOrGuardian(LocalDate applicantDob, LocalDate parentOrGuardianDob,
 			int ageCondition) {
-		return (Period.between(parentOrGuardianDob, applicantDob).getYears() >= ageCondition);
+		Period ageDifference = Period.between(applicantDob, parentOrGuardianDob);
+		regProcLogger.info("Age difference is: {} years, {} months, and {} days.", ageDifference.getYears(),
+				ageDifference.getMonths(), ageDifference.getDays());
+		return ageDifference.getYears() >= ageCondition;
 	}
 
 	private boolean handleValidationWithNoParentNinFound(Map<String, String> applicantFields) {
@@ -690,8 +720,8 @@ public class CitizenshipVerificationProcessor {
 			regProcLogger.info("GUARDIAN_NIN: " + guardianNin);
 		}
 
-		String livingStatus = applicantFields.get(MappingJsonConstants.GUARDIAN_LIVING_STATUS); // Retrieve from
-																								// applicantFields
+		String livingStatus = applicantFields.get(MappingJsonConstants.GUARDIAN_LIVING_STATUS);
+
 		String status = utility.retrieveIdrepoJsonStatus(guardianNin);
 
 		String guardianRelationToApplicantJson = applicantFields

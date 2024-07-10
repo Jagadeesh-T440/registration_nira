@@ -8,21 +8,21 @@ package io.mosip.registration.processor.paymentvalidator.constants;
 
 public enum TaxHeadCode {
 	
-	TAX_HEAD_REPLACE("RLID01", "Replacement of a Lost ID", "50000"),
-	TAX_HEAD_CHANGE("CI001", "Change Of Information-New ID Required", "50000"),
-	TAX_HEAD_CORRECTION_ERRORS("CEID01", "Correction of Errors-New ID Required", "50000"),
-	TAX_HEAD_REPLACE_DEFACED("RDID01", "Replacement of a Defaced or Damaged ID", "50000");
+	TAX_HEAD_REPLACE,
+    TAX_HEAD_CHANGE,
+    TAX_HEAD_CORRECTION_ERRORS,
+    TAX_HEAD_REPLACE_DEFACED;
 	
-	final String taxHeadCode;
-	private final String taxHeadDesc;
-	private final String amountPaid;
+	private String taxHeadCode;
+	private String taxHeadDesc;
+	private String amountPaid;
 
 
-	private TaxHeadCode(String taxHeadCode, String taxHeadDesc, String amountPaid) {
+	/*private TaxHeadCode(String taxHeadCode, String taxHeadDesc, String amountPaid) {
 		this.taxHeadCode = taxHeadCode;
 		this.taxHeadDesc = taxHeadDesc;
 		this.amountPaid = amountPaid;
-	}
+	}*/
 
 
 	public String getTaxHeadDesc() {
@@ -36,6 +36,13 @@ public enum TaxHeadCode {
 	public String getAmountPaid() {
 		return amountPaid;
 	}
+
+
+	public void setValues(String taxHeadCode, String taxHeadDesc, String amountPaid) {
+        this.taxHeadCode = taxHeadCode;
+        this.taxHeadDesc = taxHeadDesc;
+        this.amountPaid = amountPaid;
+    }
 
 
 }
