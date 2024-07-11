@@ -15,6 +15,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.util.*;
+import io.mosip.registration.processor.core.idrepo.dto.IdRequestDTO1;
+
+
 import org.apache.commons.lang.StringUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -600,6 +604,51 @@ public class Utilities {
 		return UIN;
 
 	}
+
+	public String getUINByHandle(String id, String process, ProviderStageName stageName)
+			throws IOException, ApisResourceAccessException, PacketManagerException, JsonProcessingException {
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+				"Utilities::getUINByHandle()::entry");
+		String handle = packetManagerService.getFieldByMappingJsonKey(id, MappingJsonConstants.NRCID, process, stageName);
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+				"Utilities::getUINByHandle()::handleRetrieved");
+		JSONObject jsonObject = getIdentityJSONObjectByHandle(handle);
+		return JsonUtil.getJSONValue(jsonObject, "UIN");
+	}
+
+	public JSONObject getIdentityJSONObjectByHandle(String handle) throws ApisResourceAccessException {
+		if (handle != null) {
+			IdRequestDTO1 idRequestDTO = new IdRequestDTO1();
+			idRequestDTO.setId(handle.concat("@nrcid"));
+			idRequestDTO.setIdType("handle");
+
+			IdResponseDTO1 idResponseDto = (IdResponseDTO1) restClientService.postApi(ApiName.IDREPORETRIEVEIDBYID, "", "", idRequestDTO, IdResponseDTO1.class);
+			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+					"Utilities::getUINByHandle():: IDREPORETRIEVEIDBYID POST service call ended Successfully");
+
+			if (idResponseDto != null && idResponseDto.getResponse() != null) {
+				try {
+					ResponseDTO responseDTO = idResponseDto.getResponse();
+					String response = objMapper.writeValueAsString(responseDTO.getIdentity());
+					regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+							"Utilities::getIdentityJSONObjectByHandle():: IDREPORETRIEVEIDBYID POST service call ended Successfully");
+					return (JSONObject) new JSONParser().parse(response);
+
+				} catch (org.json.simple.parser.ParseException | com.fasterxml.jackson.core.JsonProcessingException e) {
+					regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+							ExceptionUtils.getStackTrace(e));
+					throw new IdRepoAppException("Error while parsing string to JSONObject", e);
+				}
+			} else {
+				regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+						"Utilities::getIdentityJSONObjectByHandle():: IDREPORETRIEVEIDBYID POST service Returned NULL");
+			}
+
+		}
+		return null;
+	}
+
+
 
 	/**
 	 * Gets the elapse status.
