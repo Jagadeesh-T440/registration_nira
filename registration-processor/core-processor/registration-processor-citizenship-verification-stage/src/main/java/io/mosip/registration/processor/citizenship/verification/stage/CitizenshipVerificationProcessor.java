@@ -637,7 +637,7 @@ public class CitizenshipVerificationProcessor {
 
 	private boolean checkApplicantAgeWithParentOrGuardian(LocalDate applicantDob, LocalDate parentOrGuardianDob,
 			int ageCondition) {
-		Period ageDifference = Period.between(applicantDob, parentOrGuardianDob);
+		Period ageDifference = Period.between(parentOrGuardianDob,applicantDob);
 		regProcLogger.info("Age difference is: {} years, {} months, and {} days.", ageDifference.getYears(),
 				ageDifference.getMonths(), ageDifference.getDays());
 		return ageDifference.getYears() >= ageCondition;
