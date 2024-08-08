@@ -125,7 +125,7 @@ public class CitizenshipVerificationProcessor {
 		registrationStatusDto.setRegistrationStageName(ProviderStageName.CITIZENSHIP_VERIFICATION.toString());
 
 		try {
-			if (validatePacketCitizenship(registrationId, object)) {
+			if (validatePacketCitizenship(registrationId, object, registrationStatusDto, description)) {
 				object.setIsValid(Boolean.TRUE);
 				object.setInternalError(Boolean.FALSE);
 				regProcLogger.info("Citizenship Verification passed for registrationId: {}", registrationId);
@@ -140,20 +140,12 @@ public class CitizenshipVerificationProcessor {
 				description.setCode(PlatformSuccessMessages.RPR_CITIZENSHIP_VERIFICATION_SUCCESS.getCode());
 				isTransactionSuccessful = true;
 			} else {
+
 				object.setIsValid(Boolean.FALSE);
 				object.setInternalError(Boolean.FALSE);
 				regProcLogger.info(
 						"Citizenship Verification failed for registrationId: {}. Packet goes to manual verification stage.",
 						registrationId);
-				registrationStatusDto
-						.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
-				registrationStatusDto.setStatusComment(StatusUtil.CITIZENSHIP_VERIFICATION_FAILED.getMessage());
-				registrationStatusDto.setSubStatusCode(StatusUtil.CITIZENSHIP_VERIFICATION_FAILED.getCode());
-				registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
-
-				description.setMessage(PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED.getMessage() + " -- "
-						+ registrationId);
-				description.setCode(PlatformErrorMessages.RPR_CITIZENSHIP_VERIFICATION_FAILED.getCode());
 			}
 
 		} catch (Exception e) {
@@ -220,7 +212,23 @@ public class CitizenshipVerificationProcessor {
 				e.getMessage(), ExceptionUtils.getStackTrace(e));
 	}
 
-	private boolean validatePacketCitizenship(String registrationId, MessageDTO object) {
+	private void logAndSetStatusError(InternalRegistrationStatusDto registrationStatusDto, String errorMessage,
+			String subStatusCode, String statusComment, String statusCode, LogDescription description,
+			String registrationId) {
+		regProcLogger.error(errorMessage);
+		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
+		registrationStatusDto.setStatusComment(statusComment);
+		registrationStatusDto.setSubStatusCode(subStatusCode);
+		registrationStatusDto.setStatusCode(statusCode);
+
+		description.setMessage(statusComment + " -- " + registrationId);
+		description.setCode(subStatusCode);
+
+		regProcLogger.info("Updated registrationStatusDto: {}", registrationStatusDto);
+	}
+
+	private boolean validatePacketCitizenship(String registrationId, MessageDTO object,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description) {
 		boolean ifCitizenshipValid = false;
 
 		objectMapper = new ObjectMapper();
@@ -268,6 +276,12 @@ public class CitizenshipVerificationProcessor {
 
 			if (!CitizenshipType.BIRTH.getCitizenshipType().equalsIgnoreCase(citizenshipType)) {
 				regProcLogger.info("Citizenship verification failed: Not Citizen By Birth");
+				logAndSetStatusError(registrationStatusDto,
+						"Citizenship verification failed: Not Citizen By Birth for registrationId: " + registrationId,
+						StatusUtil.CITIZENSHIP_VERIFICATION_NOT_CITIZEN_BYBIRTH.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_NOT_CITIZEN_BYBIRTH.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description, registrationId);
+
 				ifCitizenshipValid = false;
 
 			} else {
@@ -278,17 +292,20 @@ public class CitizenshipVerificationProcessor {
 
 				if (!checkIfAtLeastOneParentHasNIN(applicantFields)) {
 					regProcLogger.info("Citizenship verification proceed: No parent has NIN");
-					ifCitizenshipValid = handleValidationWithNoParentNinFound(applicantFields);
+					logAndSetStatusError(registrationStatusDto,
+							"Citizenship verification proceed: No parent has NIN for registrationId: " + registrationId,
+							StatusUtil.CITIZENSHIP_VERIFICATION_NO_PARENT_NIN.getCode(),
+							StatusUtil.CITIZENSHIP_VERIFICATION_NO_PARENT_NIN.getMessage(),
+							RegistrationStatusCode.PROCESSING.toString(), description, registrationId);
+					ifCitizenshipValid = handleValidationWithNoParentNinFound(applicantFields, registrationStatusDto,
+							description);
 				} else {
 					regProcLogger.info("Citizenship verification proceed: Atleast one parent has NIN");
-					ifCitizenshipValid = handleValidationWithParentNinFound(applicantFields);
+					ifCitizenshipValid = handleValidationWithParentNinFound(applicantFields, registrationStatusDto,
+							description);
 				}
 			}
 		} catch (ApisResourceAccessException | PacketManagerException | JsonProcessingException | IOException e) {
-			InternalRegistrationStatusDto registrationStatusDto = registrationStatusService.getRegistrationStatus(
-					registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
-			LogDescription description = new LogDescription();
-
 			updateDTOsAndLogError(registrationStatusDto, RegistrationStatusCode.FAILED,
 					StatusUtil.UNKNOWN_EXCEPTION_OCCURED, RegistrationExceptionTypeCode.EXCEPTION, description,
 					PlatformErrorMessages.PACKET_MANAGER_EXCEPTION, e);
@@ -309,7 +326,8 @@ public class CitizenshipVerificationProcessor {
 		return fatherNIN != null && !fatherNIN.isEmpty() || (motherNIN != null && !motherNIN.isEmpty());
 	}
 
-	private boolean handleValidationWithParentNinFound(Map<String, String> applicantFields) {
+	private boolean handleValidationWithParentNinFound(Map<String, String> applicantFields,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description) {
 		regProcLogger.info("Citizenship verification proceed: Handling validation with parents NIN found");
 
 		DateTimeFormatter formatter = DateTimeFormatter.ofPattern(MappingJsonConstants.DATE_FORMAT);
@@ -330,10 +348,12 @@ public class CitizenshipVerificationProcessor {
 
 		if (fatherNIN != null) {
 
-			return validateParentInfo(fatherNIN, "FATHER", applicantFields, applicantDob, formatter);
+			return validateParentInfo(fatherNIN, "FATHER", applicantFields, applicantDob, formatter,
+					registrationStatusDto, description);
 		} else if (motherNIN != null) {
 
-			return validateParentInfo(motherNIN, "MOTHER", applicantFields, applicantDob, formatter);
+			return validateParentInfo(motherNIN, "MOTHER", applicantFields, applicantDob, formatter,
+					registrationStatusDto, description);
 		}
 
 		regProcLogger.error("Neither parent's NIN is provided.");
@@ -341,7 +361,8 @@ public class CitizenshipVerificationProcessor {
 	}
 
 	private boolean validateParentInfo(String parentNin, String parentType, Map<String, String> applicantFields,
-			LocalDate applicantDob, DateTimeFormatter formatter) {
+			LocalDate applicantDob, DateTimeFormatter formatter, InternalRegistrationStatusDto registrationStatusDto,
+			LogDescription description) {
 
 		regProcLogger.info("Citizenship verification proceed: Validating parent");
 		if (parentNin == null) {
@@ -350,16 +371,24 @@ public class CitizenshipVerificationProcessor {
 
 		try {
 			if (ninUsageService.isNinUsedMorethanNtimes(parentNin, parentType)) {
-				regProcLogger.error(parentType + "'s NIN is used more than N times.");
+				logAndSetStatusError(registrationStatusDto, parentType + "'s NIN is used more than N times.",
+						StatusUtil.CITIZENSHIP_VERIFICATION_NIN_USAGE_EXCEEDED.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_NIN_USAGE_EXCEEDED.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				return false;
 			}
 
 			JSONObject parentInfoJson = utility.retrieveIdrepoJson(parentNin);
-			regProcLogger.info("parentInfoJson {}: " + parentInfoJson);
 
 			if (parentInfoJson == null) {
-				regProcLogger.error(parentType + "'s NIN not found in repo data.");
+				logAndSetStatusError(registrationStatusDto, parentType + "'s NIN not found in repo data.",
+						StatusUtil.CITIZENSHIP_VERIFICATION_UIN_NOT_FOUND.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_UIN_NOT_FOUND.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				return false;
+
 			}
 
 			String livingStatusKey = (parentType.equals("FATHER") ? MappingJsonConstants.FATHER_LIVINGSTATUS
@@ -383,9 +412,14 @@ public class CitizenshipVerificationProcessor {
 			String status = utility.retrieveIdrepoJsonStatus(parentNin);
 			regProcLogger.info("ID repo status retrieved: " + status);
 
-			boolean isValidStatus = checkStatus(livingStatus, status);
+			boolean isValidStatus = checkStatus(livingStatus, status, registrationStatusDto, description,
+					applicantFields);
 			if (!isValidStatus) {
-				regProcLogger.error("Status check failed for " + parentType + ".");
+				logAndSetStatusError(registrationStatusDto, "Status check failed for " + parentType + ".",
+						StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				return false;
 			}
 
@@ -396,8 +430,14 @@ public class CitizenshipVerificationProcessor {
 
 			if (parentOrGuardianDob == null
 					|| !checkApplicantAgeWithParentOrGuardian(applicantDob, parentOrGuardianDob, 15)) {
-				regProcLogger.error(parentType + "'s age difference with the applicant is less than 15 years.");
+				logAndSetStatusError(registrationStatusDto,
+						parentType + "'s age difference with the applicant is less than 15 years.",
+						StatusUtil.CITIZENSHIP_VERIFICATION_AGE_DIFFERENCE_FAILED.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_AGE_DIFFERENCE_FAILED.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				return false;
+
 			}
 
 			Map<String, String> person1Map = extractDemographics(parentType, parentInfoJson);
@@ -406,9 +446,13 @@ public class CitizenshipVerificationProcessor {
 			Map<String, String> person2Map = extractApplicantDemographics(applicantFields);
 			regProcLogger.info("Applicant Extracted demographics for {}: {}", parentType, person2Map);
 
-			return ValidateTribeAndClan(person1Map, person2Map);
+			return ValidateTribeAndClan(person1Map, person2Map, registrationStatusDto, description, applicantFields);
 		} catch (Exception e) {
-			regProcLogger.error("Error processing " + parentType + "'s information: " + e.getMessage());
+			logAndSetStatusError(registrationStatusDto,
+					"Error processing " + parentType + "'s information: " + e.getMessage(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_PARENT_INFO_PROCESSING_ERROR.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_PARENT_INFO_PROCESSING_ERROR.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		}
 	}
@@ -488,68 +532,92 @@ public class CitizenshipVerificationProcessor {
 		}
 	}
 
-	private boolean ValidateTribeAndClan(Map<String, String> person1, Map<String, String> person2) {
+	private boolean ValidateTribeAndClan(Map<String, String> person1, Map<String, String> person2,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description,
+			Map<String, String> applicantFields) {
 		Boolean isValid = false;
 
 		if (person1.get(MappingJsonConstants.TRIBE).equalsIgnoreCase(person2.get(MappingJsonConstants.TRIBE))) {
-			regProcLogger.info("Tribe validation passed for " + person1.get(MappingJsonConstants.PERSON) + " and "
-					+ person2.get(MappingJsonConstants.PERSON));
 
 			if (person1.get(MappingJsonConstants.CLAN).equalsIgnoreCase(person2.get(MappingJsonConstants.CLAN))) {
-				regProcLogger.info("Clan validation passed for " + person1.get(MappingJsonConstants.PERSON) + " and "
-						+ person2.get(MappingJsonConstants.PERSON));
 
 				if (person1.get(MappingJsonConstants.PLACE_OF_ORIGIN)
 						.equalsIgnoreCase(person2.get(MappingJsonConstants.PLACE_OF_ORIGIN))) {
-					regProcLogger
-							.info("Place of origin validation passed for " + person1.get(MappingJsonConstants.PERSON)
-									+ " and " + person2.get(MappingJsonConstants.PERSON));
+
 					isValid = true;
 				} else {
-					regProcLogger.error("Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
-							+ person2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.PLACE_OF_ORIGIN
-							+ " information.");
+
+					logAndSetStatusError(registrationStatusDto,
+							"Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
+									+ person2.get(MappingJsonConstants.PERSON) + "'s "
+									+ MappingJsonConstants.PLACE_OF_ORIGIN + " information.",
+							StatusUtil.CITIZENSHIP_VERIFICATION_PLACE_OF_ORIGIN_MISMATCH.getCode(),
+							StatusUtil.CITIZENSHIP_VERIFICATION_PLACE_OF_ORIGIN_MISMATCH.getMessage(),
+							RegistrationStatusCode.PROCESSING.toString(), description,
+							applicantFields.get("registrationId"));
 				}
 			} else {
-				regProcLogger.error("Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
-						+ person2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.CLAN
-						+ " information.");
+
+				logAndSetStatusError(registrationStatusDto,
+						"Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
+								+ person2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.CLAN
+								+ " information.",
+						StatusUtil.CITIZENSHIP_VERIFICATION_CLAN_MISMATCH.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_CLAN_MISMATCH.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 			}
 		} else {
-			regProcLogger.error("Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
-					+ person2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.TRIBE + " information.");
+
+			logAndSetStatusError(registrationStatusDto, "Mismatch in " + person1.get(MappingJsonConstants.PERSON) + ", "
+					+ person2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.TRIBE + " information.",
+					StatusUtil.CITIZENSHIP_VERIFICATION_TRIBE_MISMATCH.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_TRIBE_MISMATCH.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 		}
 
 		return isValid;
 	}
 
-	private boolean ValidateguardianTribeAndClan(Map<String, String> guardian1, Map<String, String> guardian2) {
+	private boolean ValidateguardianTribeAndClan(Map<String, String> guardian1, Map<String, String> guardian2,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description,
+			Map<String, String> applicantFields) {
 		Boolean isValid = false;
 		if (guardian1.get(MappingJsonConstants.TRIBE).equalsIgnoreCase(guardian2.get(MappingJsonConstants.TRIBE))) {
-			regProcLogger.info("The tribe values for both guardians are the same: {}",
-					guardian1.get(MappingJsonConstants.TRIBE));
+
 			if (guardian1.get(MappingJsonConstants.CLAN).equalsIgnoreCase(guardian2.get(MappingJsonConstants.CLAN))) {
-				regProcLogger.info("The CLan values for both guardians are the same: {}",
-						guardian1.get(MappingJsonConstants.CLAN));
+
 				{
 					isValid = true;
 
 				}
 			} else {
-				regProcLogger.error("Mismatch in " + guardian1.get(MappingJsonConstants.PERSON) + ", "
-						+ guardian2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.CLAN
-						+ " information.");
+
+				logAndSetStatusError(registrationStatusDto,
+						"Mismatch in " + guardian1.get(MappingJsonConstants.PERSON) + ", "
+								+ guardian2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.CLAN
+								+ " information.",
+						StatusUtil.CITIZENSHIP_VERIFICATION_CLAN_MISMATCH.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_CLAN_MISMATCH.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 			}
 		} else {
-			regProcLogger.error("Mismatch in " + guardian1.get(MappingJsonConstants.PERSON) + ", "
-					+ guardian2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.TRIBE
-					+ " information.");
+
+			logAndSetStatusError(registrationStatusDto,
+					"Mismatch in " + guardian1.get(MappingJsonConstants.PERSON) + ", "
+							+ guardian2.get(MappingJsonConstants.PERSON) + "'s " + MappingJsonConstants.TRIBE
+							+ " information.",
+					StatusUtil.CITIZENSHIP_VERIFICATION_TRIBE_MISMATCH.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_TRIBE_MISMATCH.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 		}
 
 		return isValid;
 	}
 
-	public boolean checkStatus(String livingStatus, String status) {
+	public boolean checkStatus(String livingStatus, String status, InternalRegistrationStatusDto registrationStatusDto,
+			LogDescription description, Map<String, String> applicantFields) {
 		boolean isValid = false;
 
 		try {
@@ -559,17 +627,25 @@ public class CitizenshipVerificationProcessor {
 
 			switch (livingStatusEnum) {
 			case ALIVE:
-				isValid = handleAliveStatus(uinstatusAsEnum);
+				isValid = handleAliveStatus(uinstatusAsEnum, registrationStatusDto, description, applicantFields);
 				break;
 			case DECEASED:
-				isValid = handleDeceasedStatus(uinstatusAsEnum);
+				isValid = handleDeceasedStatus(uinstatusAsEnum, registrationStatusDto, description, applicantFields);
 				break;
 			default:
-				regProcLogger.error("Unexpected living status: " + livingStatus);
+
+				logAndSetStatusError(registrationStatusDto, "Unexpected living status: " + livingStatus,
+						StatusUtil.CITIZENSHIP_VERIFICATION_UNEXPECTED_LIVING_STATUS.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_UNEXPECTED_LIVING_STATUS.getMessage(),
+						RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 				break;
 			}
 		} catch (IllegalArgumentException e) {
-			regProcLogger.error("Invalid status provided: " + e.getMessage());
+
+			logAndSetStatusError(registrationStatusDto, "Invalid status provided: " + e.getMessage(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_INVALID.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_INVALID.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 
 			isValid = false;
 		}
@@ -577,34 +653,58 @@ public class CitizenshipVerificationProcessor {
 		return isValid;
 	}
 
-	private boolean handleAliveStatus(StatusForNinandLivivngStatus uinstatusAsEnum) {
+	private boolean handleAliveStatus(StatusForNinandLivivngStatus uinstatusAsEnum,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description,
+			Map<String, String> applicantFields) {
 
 		if (StatusForNinandLivivngStatus.DEACTIVATED.equals(uinstatusAsEnum)) {
-			regProcLogger.error("Operation failed: Living status is alive but UIN status is deactivated.");
+
+			logAndSetStatusError(registrationStatusDto,
+					"Operation failed: Living status is alive but UIN status is deactivated.",
+					StatusUtil.CITIZENSHIP_VERIFICATION_ALIVE_UIN_DEACTIVATED.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_ALIVE_UIN_DEACTIVATED.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
+
 			return false;
 		} else if (StatusForNinandLivivngStatus.ACTIVATED.equals(uinstatusAsEnum)) {
 			return true;
 		} else {
-			regProcLogger.error("Unexpected UIN status for alive individual.");
+
+			logAndSetStatusError(registrationStatusDto, "Unexpected UIN status for alive individual.",
+					StatusUtil.CITIZENSHIP_VERIFICATION_UNEXPECTED_UIN_STATUS.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_UNEXPECTED_UIN_STATUS.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		}
+
 	}
 
-	private boolean handleDeceasedStatus(StatusForNinandLivivngStatus uinstatusAsEnum) {
+	private boolean handleDeceasedStatus(StatusForNinandLivivngStatus uinstatusAsEnum,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description,
+			Map<String, String> applicantFields) {
 		try {
 
 			if (StatusForNinandLivivngStatus.ACTIVATED.equals(uinstatusAsEnum)) {
-				sendNotification(null, null, null, null);
+				sendNotification(null, registrationStatusDto, null, null);
 				return true;
 			} else if (StatusForNinandLivivngStatus.DEACTIVATED.equals(uinstatusAsEnum)) {
 
 				return true;
 			} else {
-				regProcLogger.error("Unexpected UIN status for deceased individual: " + uinstatusAsEnum);
+
+				logAndSetStatusError(registrationStatusDto,
+						"Unexpected UIN status for deceased individual: " + uinstatusAsEnum,
+						StatusUtil.CITIZENSHIP_VERIFICATION_UNEXPECTED_UIN_STATUS.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_UNEXPECTED_UIN_STATUS.getMessage(),
+						RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 				return false;
 			}
 		} catch (Exception e) {
-			regProcLogger.error("Error handling deceased status: " + e.getMessage(), e);
+
+			logAndSetStatusError(registrationStatusDto, "Error handling deceased status: " + e.getMessage(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_DECEASED_STATUS_ERROR.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_DECEASED_STATUS_ERROR.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		}
 	}
@@ -630,24 +730,33 @@ public class CitizenshipVerificationProcessor {
 						allNotificationTypes1);
 			}
 		} catch (Exception e) {
-			regProcLogger.error("Send notification failed for rid: " + e.getMessage());
-
+			logAndSetStatusError(registrationStatusDto, "Send notification failed for rid: " + e.getMessage(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_NOTIFICATION_FAILURE.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_NOTIFICATION_FAILURE.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), new LogDescription(), // Assuming you need to provide a
+																					// new LogDescription instance here
+					registrationStatusDto.getRegistrationId());
 		}
 	}
 
 	private boolean checkApplicantAgeWithParentOrGuardian(LocalDate applicantDob, LocalDate parentOrGuardianDob,
 			int ageCondition) {
-		Period ageDifference = Period.between(parentOrGuardianDob,applicantDob);
+		Period ageDifference = Period.between(parentOrGuardianDob, applicantDob);
 		regProcLogger.info("Age difference is: {} years, {} months, and {} days.", ageDifference.getYears(),
 				ageDifference.getMonths(), ageDifference.getDays());
 		return ageDifference.getYears() >= ageCondition;
 	}
 
-	private boolean handleValidationWithNoParentNinFound(Map<String, String> applicantFields) {
+	private boolean handleValidationWithNoParentNinFound(Map<String, String> applicantFields,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description) {
 
 		String guardianNin = applicantFields.get(MappingJsonConstants.GUARDIAN_NIN);
 		if (guardianNin == null) {
-			regProcLogger.warn("GUARDIAN_NIN is missing. Stopping further processing.");
+
+			logAndSetStatusError(registrationStatusDto, "GUARDIAN_NIN is missing. Stopping further processing.",
+					StatusUtil.CITIZENSHIP_VERIFICATION_GUARDIAN_NIN_MISSING.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_GUARDIAN_NIN_MISSING.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		} else {
 			regProcLogger.info("GUARDIAN_NIN: " + guardianNin);
@@ -674,9 +783,14 @@ public class CitizenshipVerificationProcessor {
 
 		try {
 			if (ninUsageService.isNinUsedMorethanNtimes(guardianNin, guardianRelationValue)) {
-				regProcLogger.info("NIN usage is over the limit for guardian NIN: " + guardianNin + ", relation: "
-						+ guardianRelationValue);
 
+				logAndSetStatusError(registrationStatusDto,
+						"NIN usage is over the limit for guardian NIN: " + guardianNin + ", relation: "
+								+ guardianRelationValue,
+						StatusUtil.CITIZENSHIP_VERIFICATION_NIN_USAGE_EXCEEDED.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_NIN_USAGE_EXCEEDED.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				return false;
 			}
 
@@ -689,27 +803,43 @@ public class CitizenshipVerificationProcessor {
 			if (guardianRelationValue.equalsIgnoreCase(Relationship.GRAND_FATHER_ON_FATHERS_SIDE.getRelationship())
 					|| Relationship.GRAND_MOTHER_ON_FATHERS_SIDE.getRelationship()
 							.equalsIgnoreCase(guardianRelationValue)) {
-				isValidGuardian = validateGrandparentRelationship(applicantFields, guardianInfoJson);
+				isValidGuardian = validateGrandparentRelationship(applicantFields, guardianInfoJson,
+						registrationStatusDto, description);
 
 			} else if (guardianRelationValue.equalsIgnoreCase(Relationship.BROTHER_OR_SISTER.getRelationship())) {
-				isValidGuardian = validateSiblingRelationship(applicantFields, guardianInfoJson);
+				isValidGuardian = validateSiblingRelationship(applicantFields, guardianInfoJson, registrationStatusDto,
+						description);
 
 			} else if (guardianRelationValue.equalsIgnoreCase(Relationship.MATERNAL_UCLE_OR_AUNT.getRelationship())
 					|| Relationship.PATERNAL_UCLE_OR_AUNT.getRelationship().equalsIgnoreCase(guardianRelationValue)) {
-				isValidGuardian = validateUncleAuntRelationship(applicantFields, guardianInfoJson);
+				isValidGuardian = validateUncleAuntRelationship(applicantFields, guardianInfoJson,
+						registrationStatusDto, description);
 			}
 
 			if (!isValidGuardian) {
-				regProcLogger.error("Guardian information validation failed.");
+
+				logAndSetStatusError(registrationStatusDto,
+						"Guardian information validation failed for registrationId: "
+								+ applicantFields.get("registrationId"),
+						StatusUtil.CITIZENSHIP_VERIFICATION_GUARDIAN_VALIDATION_FAILED.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_GUARDIAN_VALIDATION_FAILED.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 			}
 			return isValidGuardian;
 		} catch (Exception e) {
-			regProcLogger.error("Error during guardian information validation: " + e.getMessage());
+
+			logAndSetStatusError(registrationStatusDto,
+					"Error during guardian information validation: " + e.getMessage(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_GUARDIAN_INFO_PROCESSING_ERROR.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_GUARDIAN_INFO_PROCESSING_ERROR.getMessage(),
+					RegistrationStatusCode.FAILED.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		}
 	}
 
-	private boolean validateGrandparentRelationship(Map<String, String> applicantFields, JSONObject guardianInfoJson)
+	private boolean validateGrandparentRelationship(Map<String, String> applicantFields, JSONObject guardianInfoJson,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description)
 			throws IdRepoAppException, ApisResourceAccessException {
 
 		String guardianNin = applicantFields.get(MappingJsonConstants.GUARDIAN_NIN);
@@ -729,6 +859,7 @@ public class CitizenshipVerificationProcessor {
 		regProcLogger.info("GUARDIAN_RELATION_TO_APPLICANT: " + guardianRelationToApplicantJson);
 
 		ObjectMapper objectMapper = new ObjectMapper();
+
 		String guardianRelationValue = null;
 		try {
 			List<Map<String, String>> guardianRelations = objectMapper.readValue(guardianRelationToApplicantJson,
@@ -741,11 +872,16 @@ public class CitizenshipVerificationProcessor {
 			return false;
 		}
 
-		boolean isValidStatus = checkStatus(livingStatus, status);
+		boolean isValidStatus = checkStatus(livingStatus, status, registrationStatusDto, description, applicantFields);
 		regProcLogger.info("isValidStatus: " + isValidStatus);
 
 		if (!isValidStatus) {
-			regProcLogger.error("Status check failed.");
+
+			logAndSetStatusError(registrationStatusDto,
+					"Status check failed for guardian NIN: " + guardianNin + ", relation: " + guardianRelationValue,
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		}
 
@@ -763,7 +899,13 @@ public class CitizenshipVerificationProcessor {
 		regProcLogger.info("Guardian DOB: " + parentOrGuardianDob);
 
 		if (!checkApplicantAgeWithParentOrGuardian(applicantDob, parentOrGuardianDob, 20)) {
-			regProcLogger.error("Guardian (grandfather) is not at least 20 years older than the applicant.");
+
+			logAndSetStatusError(registrationStatusDto,
+					"Guardian (grandfather) is not at least 20 years older than the applicant for registrationId: "
+							+ applicantFields.get("registrationId"),
+					StatusUtil.CITIZENSHIP_VERIFICATION_AGE_DIFFERENCE_FAILED.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_AGE_DIFFERENCE_FAILED.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 			isValidGuardian = false;
 		}
 
@@ -773,10 +915,12 @@ public class CitizenshipVerificationProcessor {
 		Map<String, String> guardian2Map = extractApplicantDemographicss(applicantFields);
 		regProcLogger.info("Extracted demographics for applicant: {}", guardian2Map);
 
-		boolean isValidTribeAndClan = ValidateguardianTribeAndClan(guardian1Map, guardian2Map);
+		boolean isValidTribeAndClan = ValidateguardianTribeAndClan(guardian1Map, guardian2Map, registrationStatusDto,
+				description, applicantFields);
 
 		if (isValidGuardian && isValidTribeAndClan) {
-			isValidGuardian = validateParentAndGrandparentInformation(applicantFields, guardianInfoJson);
+			isValidGuardian = validateParentAndGrandparentInformation(applicantFields, guardianInfoJson,
+					registrationStatusDto, description);
 		}
 
 		return isValidGuardian;
@@ -857,7 +1001,8 @@ public class CitizenshipVerificationProcessor {
 	}
 
 	private boolean validateParentAndGrandparentInformation(Map<String, String> applicantFields,
-			JSONObject guardianInfoJson) {
+			JSONObject guardianInfoJson, InternalRegistrationStatusDto registrationStatusDto,
+			LogDescription description) {
 		boolean isValidGuardian = true;
 
 		String fatherClanJson = applicantFields.get(MappingJsonConstants.FATHER_CLAN);
@@ -865,6 +1010,7 @@ public class CitizenshipVerificationProcessor {
 
 		String fatherClan = null;
 		ObjectMapper objectMapper = new ObjectMapper();
+
 		try {
 			if (fatherClanJson != null && !fatherClanJson.isEmpty()) {
 				List<Map<String, String>> fatherClanList = objectMapper.readValue(fatherClanJson,
@@ -953,25 +1099,45 @@ public class CitizenshipVerificationProcessor {
 			}
 
 			if (!fatherClan.equalsIgnoreCase(grandfatherClan)) {
+				logAndSetStatusError(registrationStatusDto,
+						"Mismatch in clan information between father and grandfather for registrationId: "
+								+ applicantFields.get("registrationId"),
+						StatusUtil.CITIZENSHIP_VERIFICATION_CLAN_MISMATCH.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_CLAN_MISMATCH.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				isValidGuardian = false;
-				regProcLogger.error("Mismatch in clan information between father and grandfather.");
+
 			}
 
 			if (isValidGuardian && !fatherTribe.equalsIgnoreCase(grandfatherTribe)) {
+				logAndSetStatusError(registrationStatusDto,
+						"Mismatch in tribe information between father and grandfather for registrationId: "
+								+ applicantFields.get("registrationId"),
+						StatusUtil.CITIZENSHIP_VERIFICATION_TRIBE_MISMATCH.getCode(),
+						StatusUtil.CITIZENSHIP_VERIFICATION_TRIBE_MISMATCH.getMessage(),
+						RegistrationStatusCode.PROCESSING.toString(), description,
+						applicantFields.get("registrationId"));
 				isValidGuardian = false;
-				regProcLogger.error("Mismatch in tribe information between father and grandfather.");
+
 			}
 		} else {
-
+			logAndSetStatusError(registrationStatusDto,
+					"Insufficient father's information provided for validation for registrationId: "
+							+ applicantFields.get("registrationId"),
+					StatusUtil.CITIZENSHIP_VERIFICATION_INSUFFICIENT_FATHER_INFO.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_INSUFFICIENT_FATHER_INFO.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 			isValidGuardian = false;
-			regProcLogger.error("Insufficient father's information provided for validation.");
+
 		}
 
 		regProcLogger.info("Validation result: " + isValidGuardian);
 		return isValidGuardian;
 	}
 
-	private boolean validateSiblingRelationship(Map<String, String> applicantFields, JSONObject guardianInfoJson)
+	private boolean validateSiblingRelationship(Map<String, String> applicantFields, JSONObject guardianInfoJson,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description)
 			throws IdRepoAppException, ApisResourceAccessException {
 
 		String guardianNin = applicantFields.get(MappingJsonConstants.GUARDIAN_NIN);
@@ -990,6 +1156,7 @@ public class CitizenshipVerificationProcessor {
 		regProcLogger.info("GUARDIAN_RELATION_TO_APPLICANT: " + guardianRelationToApplicantJson);
 
 		ObjectMapper objectMapper = new ObjectMapper();
+
 		String guardianRelationValue = null;
 		try {
 			List<Map<String, String>> guardianRelations = objectMapper.readValue(guardianRelationToApplicantJson,
@@ -1002,11 +1169,15 @@ public class CitizenshipVerificationProcessor {
 			return false;
 		}
 
-		boolean isValidStatus = checkStatus(livingStatus, status);
+		boolean isValidStatus = checkStatus(livingStatus, status, registrationStatusDto, description, applicantFields);
 
 		if (!isValidStatus) {
 
-			regProcLogger.error("Status check failed.");
+			logAndSetStatusError(registrationStatusDto,
+					"Status check failed for guardian NIN: " + guardianNin + ", relation: " + guardianRelationValue,
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
 			return false;
 		}
 
@@ -1018,12 +1189,14 @@ public class CitizenshipVerificationProcessor {
 		Map<String, String> guardian2Map = extractApplicantDemographicss(applicantFields);
 		regProcLogger.info("Extracted demographics for applicant: {}", guardian2Map);
 
-		isValidStatus = ValidateguardianTribeAndClan(guardian1Map, guardian2Map);
+		isValidStatus = ValidateguardianTribeAndClan(guardian1Map, guardian2Map, registrationStatusDto, description,
+				applicantFields);
 
 		return isValidGuardian;
 	}
 
-	private boolean validateUncleAuntRelationship(Map<String, String> applicantFields, JSONObject guardianInfoJson)
+	private boolean validateUncleAuntRelationship(Map<String, String> applicantFields, JSONObject guardianInfoJson,
+			InternalRegistrationStatusDto registrationStatusDto, LogDescription description)
 			throws IdRepoAppException, ApisResourceAccessException {
 
 		String guardianNin = applicantFields.get(MappingJsonConstants.GUARDIAN_NIN);
@@ -1042,6 +1215,7 @@ public class CitizenshipVerificationProcessor {
 		regProcLogger.info("GUARDIAN_RELATION_TO_APPLICANT: " + guardianRelationToApplicantJson);
 
 		ObjectMapper objectMapper = new ObjectMapper();
+
 		String guardianRelationValue = null;
 		try {
 			List<Map<String, String>> guardianRelations = objectMapper.readValue(guardianRelationToApplicantJson,
@@ -1054,10 +1228,15 @@ public class CitizenshipVerificationProcessor {
 			return false;
 		}
 
-		boolean isValidStatus = checkStatus(livingStatus, status);
+		boolean isValidStatus = checkStatus(livingStatus, status, registrationStatusDto, description, applicantFields);
 
 		if (!isValidStatus) {
-			regProcLogger.error("Status check failed.");
+			logAndSetStatusError(registrationStatusDto,
+					"Status check failed for guardian NIN: " + guardianNin + ", relation: " + guardianRelationValue,
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getCode(),
+					StatusUtil.CITIZENSHIP_VERIFICATION_STATUS_CHECK_FAILED.getMessage(),
+					RegistrationStatusCode.PROCESSING.toString(), description, applicantFields.get("registrationId"));
+
 		}
 
 		boolean isValidGuardian = true;
@@ -1068,7 +1247,8 @@ public class CitizenshipVerificationProcessor {
 		Map<String, String> guardian2Map = extractApplicantDemographicss(applicantFields);
 		regProcLogger.info("Extracted demographics for applicant: {}", guardian2Map);
 
-		isValidStatus = ValidateguardianTribeAndClan(guardian1Map, guardian2Map);
+		isValidStatus = ValidateguardianTribeAndClan(guardian1Map, guardian2Map, registrationStatusDto, description,
+				applicantFields);
 
 		return isValidGuardian;
 	}
