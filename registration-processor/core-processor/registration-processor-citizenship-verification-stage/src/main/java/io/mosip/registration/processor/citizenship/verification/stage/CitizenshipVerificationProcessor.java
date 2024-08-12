@@ -256,7 +256,7 @@ public class CitizenshipVerificationProcessor {
 			Map<String, String> applicantFields = utility.getPacketManagerService().getFields(registrationId,
 					fieldsToFetch, object.getReg_type(), ProviderStageName.CITIZENSHIP_VERIFICATION);
 
-			applicantFields.put(MappingJsonConstants.GUARDIAN_LIVING_STATUS, "Deceased");
+			applicantFields.put(MappingJsonConstants.GUARDIAN_LIVING_STATUS, "Alive");
 
 			regProcLogger.info("fields fetched {}: " + applicantFields.toString());
 
