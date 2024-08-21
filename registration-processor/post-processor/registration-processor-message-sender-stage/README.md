@@ -1,3 +1,0 @@
-# Message Sender Stage
-
-**DEPRECATED**
